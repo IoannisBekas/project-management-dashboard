@@ -1,0 +1,1752 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Project Management Dashboard</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f5;
+      --surface: #ffffff;
+      --surface-2: #eef2ef;
+      --ink: #202522;
+      --muted: #667068;
+      --line: #dce3de;
+      --line-strong: #c4cec8;
+      --green: #2f8f5b;
+      --green-soft: #dff4e8;
+      --blue: #3563a6;
+      --blue-soft: #e2ebfb;
+      --amber: #ad6a00;
+      --amber-soft: #fff0cf;
+      --red: #b13d3d;
+      --red-soft: #ffe1df;
+      --violet: #6253a8;
+      --shadow: 0 12px 32px rgba(32, 37, 34, 0.08);
+      --radius: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+      letter-spacing: 0;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 15px;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    button,
+    .file-button {
+      border: 1px solid var(--line-strong);
+      background: var(--surface);
+      color: var(--ink);
+      border-radius: 7px;
+      min-height: 38px;
+      padding: 0 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    button:hover,
+    .file-button:hover {
+      border-color: #8ea096;
+      background: #f9fbfa;
+    }
+
+    button.primary,
+    .file-button.primary {
+      background: var(--ink);
+      border-color: var(--ink);
+      color: #fff;
+    }
+
+    button.icon {
+      width: 38px;
+      padding: 0;
+    }
+
+    input,
+    select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--surface);
+      color: var(--ink);
+      min-height: 38px;
+      padding: 0 10px;
+      outline: none;
+    }
+
+    input:focus,
+    select:focus {
+      border-color: var(--green);
+      box-shadow: 0 0 0 3px rgba(47, 143, 91, 0.14);
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .app {
+      min-height: 100vh;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      border-bottom: 1px solid var(--line);
+      background: rgba(246, 247, 245, 0.94);
+      backdrop-filter: blur(14px);
+    }
+
+    .topbar-inner {
+      max-width: 1480px;
+      margin: 0 auto;
+      padding: 14px 22px;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .title-block {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .mark {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #2f8f5b, #3563a6 62%, #ad6a00);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.42);
+      flex: 0 0 auto;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.1;
+    }
+
+    .source {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 13px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    #fileInput {
+      position: absolute;
+      inline-size: 1px;
+      block-size: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+
+    .main {
+      max-width: 1480px;
+      margin: 0 auto;
+      padding: 22px;
+      display: grid;
+      gap: 18px;
+    }
+
+    .notice {
+      display: none;
+      border: 1px solid var(--amber);
+      background: var(--amber-soft);
+      color: #5c3900;
+      border-radius: var(--radius);
+      padding: 12px 14px;
+    }
+
+    .notice.visible {
+      display: block;
+    }
+
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .kpi {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px;
+      box-shadow: var(--shadow);
+      min-width: 0;
+    }
+
+    .kpi span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .kpi strong {
+      display: block;
+      margin-top: 10px;
+      font-size: 28px;
+      line-height: 1;
+    }
+
+    .kpi small {
+      display: block;
+      margin-top: 8px;
+      color: var(--muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .filters {
+      display: grid;
+      grid-template-columns: minmax(230px, 1.35fr) repeat(5, minmax(140px, 1fr));
+      gap: 10px;
+      align-items: end;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px;
+      box-shadow: var(--shadow);
+    }
+
+    .content-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 340px;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      min-width: 0;
+    }
+
+    .panel-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .panel-header h2 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .panel-header p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .panel-header-tools {
+      display: flex;
+      align-items: end;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    .capacity-control {
+      width: 150px;
+    }
+
+    .availability-wrap {
+      overflow: auto;
+    }
+
+    .availability-table {
+      min-width: 760px;
+    }
+
+    .availability-table th small {
+      display: block;
+      margin-top: 3px;
+      color: #7a857e;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: none;
+    }
+
+    .availability-table tbody tr {
+      cursor: default;
+    }
+
+    .availability-worker {
+      min-width: 160px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .week-cell {
+      display: grid;
+      gap: 2px;
+      min-width: 120px;
+    }
+
+    .week-cell strong {
+      font-size: 18px;
+      line-height: 1.1;
+      color: var(--blue);
+      white-space: nowrap;
+    }
+
+    .week-cell span {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .week-cell span.free {
+      color: var(--green);
+      font-weight: 700;
+    }
+
+    .week-cell span.over {
+      color: var(--red);
+      font-weight: 700;
+    }
+
+    .week-cell.overbooked strong {
+      color: var(--red);
+    }
+
+    .capacity-cell {
+      color: var(--muted);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      max-height: calc(100vh - 340px);
+      min-height: 420px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      min-width: 980px;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid var(--line);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      background: #f8faf8;
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    tbody tr {
+      cursor: pointer;
+    }
+
+    tbody tr:hover,
+    tbody tr.selected {
+      background: #f1f6f2;
+    }
+
+    td.compact,
+    th.compact {
+      width: 50px;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .job {
+      color: #24785b;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .project-cell {
+      max-width: 260px;
+      min-width: 190px;
+    }
+
+    .project-name {
+      font-weight: 700;
+      line-height: 1.25;
+    }
+
+    .client {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 3px;
+    }
+
+    .notes-cell {
+      max-width: 240px;
+      min-width: 170px;
+      color: #3e4942;
+      line-height: 1.35;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 4px 8px;
+      min-height: 24px;
+      font-size: 12px;
+      font-weight: 700;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .pill.red {
+      background: var(--red-soft);
+      color: var(--red);
+    }
+
+    .pill.amber {
+      background: var(--amber-soft);
+      color: var(--amber);
+    }
+
+    .pill.green {
+      background: var(--green-soft);
+      color: var(--green);
+    }
+
+    .pill.blue {
+      background: var(--blue-soft);
+      color: var(--blue);
+    }
+
+    .pill.gray {
+      background: var(--surface-2);
+      color: var(--muted);
+    }
+
+    .side {
+      display: grid;
+      gap: 18px;
+    }
+
+    .section-body {
+      padding: 14px 16px;
+    }
+
+    .workload {
+      display: grid;
+      gap: 12px;
+    }
+
+    .worker-row {
+      display: grid;
+      gap: 6px;
+    }
+
+    .worker-meta {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .worker-meta strong {
+      font-size: 14px;
+    }
+
+    .worker-meta span {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .bar {
+      height: 10px;
+      border-radius: 999px;
+      background: var(--surface-2);
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      width: 0;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--green), var(--blue));
+    }
+
+    .due-lanes {
+      display: grid;
+      gap: 10px;
+    }
+
+    .lane {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 10px;
+      background: #fbfcfb;
+    }
+
+    .lane-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      font-weight: 800;
+      font-size: 13px;
+    }
+
+    .lane ul {
+      list-style: none;
+      padding: 0;
+      margin: 9px 0 0;
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .lane li {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .detail-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .detail-item {
+      display: grid;
+      gap: 4px;
+    }
+
+    .detail-item span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .detail-item strong,
+    .detail-item div {
+      line-height: 1.35;
+      word-break: break-word;
+    }
+
+    .empty {
+      padding: 42px 18px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .status-line {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 1160px) {
+      .kpis {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .filters {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .content-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .table-wrap {
+        max-height: none;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .topbar-inner {
+        grid-template-columns: 1fr;
+        padding: 12px;
+      }
+
+      .actions {
+        justify-content: stretch;
+      }
+
+      .actions button,
+      .actions .file-button {
+        flex: 1 1 auto;
+      }
+
+      .main {
+        padding: 12px;
+      }
+
+      .kpis,
+      .filters {
+        grid-template-columns: 1fr;
+      }
+
+      .kpi strong {
+        font-size: 24px;
+      }
+
+      .panel-header {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .panel-header-tools,
+      .capacity-control {
+        width: 100%;
+      }
+    }
+
+    @media print {
+      .topbar,
+      .filters,
+      .side {
+        display: none;
+      }
+
+      body {
+        background: #fff;
+      }
+
+      .main {
+        padding: 0;
+      }
+
+      .panel,
+      .kpi {
+        box-shadow: none;
+      }
+
+      .content-grid {
+        display: block;
+      }
+
+      .table-wrap {
+        max-height: none;
+        overflow: visible;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="title-block">
+          <div class="mark" aria-hidden="true"></div>
+          <div>
+            <h1>Project Dashboard</h1>
+            <div class="source" id="sourceLabel">Sample workbook data</div>
+          </div>
+        </div>
+        <div class="actions">
+          <input id="fileInput" type="file" accept=".xlsx,.xls,.xlsm,.csv">
+          <label class="file-button primary" for="fileInput" title="Import Excel workbook">Import Excel</label>
+          <button type="button" id="sampleButton" title="Load sample rows">Sample</button>
+          <button type="button" id="exportButton" title="Export filtered table to CSV">Export CSV</button>
+          <button type="button" class="icon" id="printButton" title="Print dashboard">Print</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="main">
+      <div class="notice" id="notice"></div>
+
+      <section class="kpis" aria-label="Project summary">
+        <article class="kpi">
+          <span>Active Jobs</span>
+          <strong id="activeJobs">0</strong>
+          <small id="activeJobsHint">0 workers</small>
+        </article>
+        <article class="kpi">
+          <span>Week Hours</span>
+          <strong id="weekHours">0</strong>
+          <small id="weekHoursHint">Across visible rows</small>
+        </article>
+        <article class="kpi">
+          <span>Overdue</span>
+          <strong id="overdueJobs">0</strong>
+          <small id="overdueHint">Past due date</small>
+        </article>
+        <article class="kpi">
+          <span>Due Soon</span>
+          <strong id="dueSoonJobs">0</strong>
+          <small id="dueSoonHint">Next 3 days</small>
+        </article>
+        <article class="kpi">
+          <span>Open Notes</span>
+          <strong id="notedJobs">0</strong>
+          <small id="notedHint">Rows with notes</small>
+        </article>
+      </section>
+
+      <section class="filters" aria-label="Dashboard filters">
+        <label>
+          Search
+          <input id="searchInput" type="search" placeholder="Job, client, project, note">
+        </label>
+        <label>
+          Worker
+          <select id="workerFilter"></select>
+        </label>
+        <label>
+          Client
+          <select id="clientFilter"></select>
+        </label>
+        <label>
+          Due
+          <select id="dueFilter">
+            <option value="all">All due dates</option>
+            <option value="overdue">Overdue</option>
+            <option value="soon">Due next 3 days</option>
+            <option value="future">Future</option>
+            <option value="none">No due date</option>
+          </select>
+        </label>
+        <label>
+          Remarks
+          <select id="remarksFilter"></select>
+        </label>
+        <label>
+          Sort
+          <select id="sortSelect">
+            <option value="dueAsc">Due date</option>
+            <option value="workerAsc">Worker</option>
+            <option value="hoursDesc">Hours high to low</option>
+            <option value="clientAsc">Client</option>
+            <option value="jobAsc">Job number</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="panel" aria-label="Weekly availability">
+        <div class="panel-header">
+          <div>
+            <h2>Weekly Availability</h2>
+            <p id="availabilitySummary">0h available this week</p>
+          </div>
+          <div class="panel-header-tools">
+            <label class="capacity-control">
+              Weekly capacity
+              <input id="weeklyCapacityInput" type="number" min="0" max="120" step="0.5" value="40">
+            </label>
+          </div>
+        </div>
+        <div class="availability-wrap">
+          <table class="availability-table">
+            <thead>
+              <tr>
+                <th>Worker</th>
+                <th>This week<small id="thisWeekRange"></small></th>
+                <th>Next week<small id="nextWeekRange"></small></th>
+                <th>3 weeks<small id="thirdWeekRange"></small></th>
+                <th>Capacity</th>
+              </tr>
+            </thead>
+            <tbody id="availabilityRows"></tbody>
+          </table>
+          <div class="empty" id="availabilityEmpty">No worker hours match the current filters.</div>
+        </div>
+      </section>
+
+      <section class="content-grid">
+        <article class="panel">
+          <div class="panel-header">
+            <div>
+              <h2>Projects</h2>
+              <p id="tableCount">0 rows</p>
+            </div>
+            <div class="status-line" id="lastUpdated"></div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Worker</th>
+                  <th>Job</th>
+                  <th>Project</th>
+                  <th class="compact">M</th>
+                  <th class="compact">T</th>
+                  <th class="compact">W</th>
+                  <th class="compact">T</th>
+                  <th class="compact">F</th>
+                  <th class="compact">Total</th>
+                  <th>Notes</th>
+                  <th>Due</th>
+                  <th>Remarks</th>
+                </tr>
+              </thead>
+              <tbody id="projectRows"></tbody>
+            </table>
+            <div class="empty" id="emptyState">No rows match the current filters.</div>
+          </div>
+        </article>
+
+        <aside class="side">
+          <article class="panel">
+            <div class="panel-header">
+              <h2>Workload</h2>
+              <p id="workloadCount">0 workers</p>
+            </div>
+            <div class="section-body workload" id="workload"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-header">
+              <h2>Due Lanes</h2>
+              <p>Visible rows</p>
+            </div>
+            <div class="section-body due-lanes" id="dueLanes"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-header">
+              <h2>Selected Row</h2>
+              <p id="selectedHint">Click a project</p>
+            </div>
+            <div class="section-body detail-list" id="detailPanel"></div>
+          </article>
+        </aside>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script>
+    const dayKeys = ["mon", "tue", "wed", "thu", "fri"];
+    const dayLabels = { mon: "M", tue: "T", wed: "W", thu: "T", fri: "F" };
+    const currentYear = new Date().getFullYear();
+    const today = startOfDay(new Date());
+    const DEFAULT_WEEKLY_CAPACITY = 40;
+    const CAPACITY_STORAGE_KEY = "projectDashboard.weeklyCapacity";
+
+    const state = {
+      records: [],
+      filtered: [],
+      selectedId: null,
+      sourceName: "Sample workbook data",
+      weeklyCapacity: readStoredCapacity()
+    };
+
+    const els = {
+      sourceLabel: document.getElementById("sourceLabel"),
+      notice: document.getElementById("notice"),
+      fileInput: document.getElementById("fileInput"),
+      sampleButton: document.getElementById("sampleButton"),
+      exportButton: document.getElementById("exportButton"),
+      printButton: document.getElementById("printButton"),
+      searchInput: document.getElementById("searchInput"),
+      workerFilter: document.getElementById("workerFilter"),
+      clientFilter: document.getElementById("clientFilter"),
+      dueFilter: document.getElementById("dueFilter"),
+      remarksFilter: document.getElementById("remarksFilter"),
+      sortSelect: document.getElementById("sortSelect"),
+      activeJobs: document.getElementById("activeJobs"),
+      activeJobsHint: document.getElementById("activeJobsHint"),
+      weekHours: document.getElementById("weekHours"),
+      weekHoursHint: document.getElementById("weekHoursHint"),
+      overdueJobs: document.getElementById("overdueJobs"),
+      overdueHint: document.getElementById("overdueHint"),
+      dueSoonJobs: document.getElementById("dueSoonJobs"),
+      dueSoonHint: document.getElementById("dueSoonHint"),
+      notedJobs: document.getElementById("notedJobs"),
+      notedHint: document.getElementById("notedHint"),
+      weeklyCapacityInput: document.getElementById("weeklyCapacityInput"),
+      availabilitySummary: document.getElementById("availabilitySummary"),
+      availabilityRows: document.getElementById("availabilityRows"),
+      availabilityEmpty: document.getElementById("availabilityEmpty"),
+      thisWeekRange: document.getElementById("thisWeekRange"),
+      nextWeekRange: document.getElementById("nextWeekRange"),
+      thirdWeekRange: document.getElementById("thirdWeekRange"),
+      tableCount: document.getElementById("tableCount"),
+      lastUpdated: document.getElementById("lastUpdated"),
+      projectRows: document.getElementById("projectRows"),
+      emptyState: document.getElementById("emptyState"),
+      workload: document.getElementById("workload"),
+      workloadCount: document.getElementById("workloadCount"),
+      dueLanes: document.getElementById("dueLanes"),
+      detailPanel: document.getElementById("detailPanel"),
+      selectedHint: document.getElementById("selectedHint")
+    };
+
+    const sampleRecords = [
+      {
+        worker: "David August",
+        jobNumber: "26-0124",
+        client: "Ianuzziello & Associates Inc.",
+        project: "Amazon YYZ4 - Proposed Break Room",
+        hours: { mon: 1, tue: 2, wed: 2, thu: 0, fri: 0 },
+        notes: "need stamp Ontario",
+        dueText: "19-Jun",
+        dueDate: parseDueDate("19-Jun"),
+        remarks: "UNDER REVIEW"
+      },
+      {
+        worker: "David August",
+        jobNumber: "26-0125",
+        client: "Ianuzziello & Associates Inc.",
+        project: "Knix Don Mills",
+        hours: { mon: 0, tue: 0, wed: 0, thu: 0, fri: 0 },
+        notes: "need flow test",
+        dueText: "16-Jun",
+        dueDate: parseDueDate("16-Jun"),
+        remarks: ""
+      },
+      {
+        worker: "David August",
+        jobNumber: "26-0112",
+        client: "D&H Fire",
+        project: "Wharton Concessions and Dressing Rooms",
+        hours: { mon: 3, tue: 0, wed: 0, thu: 0, fri: 0 },
+        notes: "Waiting for INFO",
+        dueText: "15-Jun",
+        dueDate: parseDueDate("15-Jun"),
+        remarks: ""
+      },
+      {
+        worker: "David August",
+        jobNumber: "26-0139",
+        client: "1ST RESPONSE",
+        project: "Dr. Alimat",
+        hours: { mon: 0, tue: 5, wed: 0, thu: 0, fri: 0 },
+        notes: "",
+        dueText: "16-Jun",
+        dueDate: parseDueDate("16-Jun"),
+        remarks: "SENT TO SCOTT"
+      },
+      {
+        worker: "Jhairey",
+        jobNumber: "",
+        client: "Sandals Resorts International",
+        project: "YOYO playhouse and Fickle Flamingo",
+        hours: { mon: 0, tue: 0, wed: 5, thu: 0, fri: 0 },
+        notes: "Designed - need riser location and ug connection",
+        dueText: "3-Jul",
+        dueDate: parseDueDate("3-Jul"),
+        remarks: ""
+      },
+      {
+        worker: "Jhairey",
+        jobNumber: "25-0257",
+        client: "High Sierra",
+        project: "Heavenly Tower Slight modifications",
+        hours: { mon: 0, tue: 0, wed: 0, thu: 3, fri: 0 },
+        notes: "",
+        dueText: "18-Jun",
+        dueDate: parseDueDate("18-Jun"),
+        remarks: ""
+      },
+      {
+        worker: "Amanda",
+        jobNumber: "26-0147",
+        client: "Bluewater Retail",
+        project: "Mall kiosk sprinkler coordination",
+        hours: { mon: 2, tue: 1, wed: 0, thu: 2, fri: 0 },
+        notes: "Review tenant comments",
+        dueText: "22-Jun",
+        dueDate: parseDueDate("22-Jun"),
+        remarks: "CLIENT REVIEW"
+      },
+      {
+        worker: "Cameron",
+        jobNumber: "26-0151",
+        client: "Northline Builders",
+        project: "Loading dock fire protection revision",
+        hours: { mon: 0, tue: 2, wed: 4, thu: 0, fri: 0 },
+        notes: "Coordinate with architect",
+        dueText: "24-Jun",
+        dueDate: parseDueDate("24-Jun"),
+        remarks: ""
+      }
+    ].map((record, index) => finalizeRecord(record, index + 1));
+
+    document.addEventListener("DOMContentLoaded", () => {
+      els.weeklyCapacityInput.value = state.weeklyCapacity;
+      bindEvents();
+      setRecords(sampleRecords, "Sample workbook data");
+      if (!window.XLSX) {
+        showNotice("Excel import library did not load. The sample dashboard still works, but importing .xlsx files requires internet access for the SheetJS script.");
+      }
+    });
+
+    function bindEvents() {
+      els.fileInput.addEventListener("change", handleFile);
+      els.sampleButton.addEventListener("click", () => setRecords(sampleRecords, "Sample workbook data"));
+      els.exportButton.addEventListener("click", exportCsv);
+      els.printButton.addEventListener("click", () => window.print());
+      els.weeklyCapacityInput.addEventListener("input", () => {
+        state.weeklyCapacity = Math.max(0, toNumber(els.weeklyCapacityInput.value));
+        saveWeeklyCapacity(state.weeklyCapacity);
+        renderAvailability();
+      });
+      [
+        els.searchInput,
+        els.workerFilter,
+        els.clientFilter,
+        els.dueFilter,
+        els.remarksFilter,
+        els.sortSelect
+      ].forEach((control) => control.addEventListener("input", render));
+    }
+
+    async function handleFile(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+
+      hideNotice();
+
+      if (!window.XLSX) {
+        showNotice("Cannot import Excel because the XLSX library is unavailable. Check internet access and reload this file.");
+        return;
+      }
+
+      try {
+        const buffer = await file.arrayBuffer();
+        const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+        const records = parseWorkbook(workbook);
+
+        if (!records.length) {
+          showNotice("No project rows were found. Check that each worker sheet has headers like Job Number, Client, Project, Notes, Due, and Remarks.");
+          return;
+        }
+
+        setRecords(records, file.name);
+      } catch (error) {
+        console.error(error);
+        showNotice("Import failed. The workbook may be open, encrypted, or in a layout that needs a small parser adjustment.");
+      } finally {
+        event.target.value = "";
+      }
+    }
+
+    function parseWorkbook(workbook) {
+      const allRecords = [];
+
+      workbook.SheetNames.forEach((sheetName) => {
+        const sheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, {
+          header: 1,
+          defval: "",
+          raw: false,
+          dateNF: "dd-mmm-yyyy"
+        });
+
+        const headerRowIndex = findHeaderRow(rows);
+        if (headerRowIndex === -1) return;
+
+        const worker = getWorkerName(rows, headerRowIndex, sheetName);
+        const headers = rows[headerRowIndex].map((value) => clean(value));
+        const indexes = getColumnIndexes(headers);
+        const dayColumns = getDayColumns(headers, indexes);
+
+        rows.slice(headerRowIndex + 1).forEach((row, offset) => {
+          const rowNumber = headerRowIndex + offset + 2;
+          const jobNumber = clean(row[indexes.job]);
+          const client = clean(row[indexes.client]);
+          const project = clean(row[indexes.project]);
+          const notes = clean(row[indexes.notes]);
+          const dueText = clean(row[indexes.due]);
+          const remarks = clean(row[indexes.remarks]);
+
+          if (!jobNumber && !client && !project && !notes && !dueText && !remarks) return;
+
+          const hours = {};
+          dayKeys.forEach((key) => {
+            hours[key] = toNumber(row[dayColumns[key]]);
+          });
+
+          allRecords.push(finalizeRecord({
+            worker,
+            sheetName,
+            rowNumber,
+            jobNumber,
+            client,
+            project,
+            hours,
+            notes,
+            dueText,
+            dueDate: parseDueDate(dueText),
+            remarks
+          }, allRecords.length + 1));
+        });
+      });
+
+      return allRecords;
+    }
+
+    function findHeaderRow(rows) {
+      const limit = Math.min(rows.length, 15);
+      for (let index = 0; index < limit; index += 1) {
+        const normalized = rows[index].map((value) => normalizeHeader(value));
+        const hasJob = normalized.some((value) => ["jobnumber", "jobno", "job", "jobid"].includes(value));
+        const hasClient = normalized.includes("client");
+        const hasProject = normalized.includes("project");
+        if ((hasJob || hasClient) && hasProject) return index;
+      }
+      return -1;
+    }
+
+    function getWorkerName(rows, headerRowIndex, sheetName) {
+      for (let index = 0; index < headerRowIndex; index += 1) {
+        const firstValue = rows[index].find((value) => clean(value));
+        if (firstValue) return clean(firstValue);
+      }
+      return sheetName;
+    }
+
+    function getColumnIndexes(headers) {
+      return {
+        job: findColumn(headers, ["jobnumber", "jobno", "job", "jobid"]),
+        client: findColumn(headers, ["client", "customer"]),
+        project: findColumn(headers, ["project", "projectname", "description"]),
+        notes: findColumn(headers, ["notes", "note", "comments"]),
+        due: findColumn(headers, ["due", "duedate", "deadline"]),
+        remarks: findColumn(headers, ["remarks", "remark", "status"])
+      };
+    }
+
+    function findColumn(headers, aliases) {
+      const normalized = headers.map((header) => normalizeHeader(header));
+      return normalized.findIndex((header) => aliases.includes(header));
+    }
+
+    function getDayColumns(headers, indexes) {
+      const columns = {};
+      const start = indexes.project >= 0 ? indexes.project + 1 : 0;
+      const endCandidates = [indexes.notes, indexes.due, indexes.remarks].filter((index) => index > start);
+      const end = endCandidates.length ? Math.min(...endCandidates) : headers.length;
+      const candidates = [];
+
+      for (let col = start; col < end; col += 1) {
+        const header = normalizeHeader(headers[col]);
+        if (isDayHeader(header)) candidates.push(col);
+      }
+
+      const sourceColumns = candidates.length ? candidates : range(start, Math.min(start + 5, end));
+      dayKeys.forEach((key, index) => {
+        columns[key] = sourceColumns[index] ?? -1;
+      });
+
+      return columns;
+    }
+
+    function isDayHeader(header) {
+      return [
+        "m", "mon", "monday",
+        "t", "tu", "tue", "tues", "tuesday",
+        "w", "wed", "wednesday",
+        "th", "thu", "thur", "thurs", "thursday",
+        "f", "fri", "friday"
+      ].includes(header);
+    }
+
+    function setRecords(records, sourceName) {
+      state.records = records.map((record, index) => finalizeRecord(record, index + 1));
+      state.sourceName = sourceName;
+      state.selectedId = state.records[0] ? state.records[0].id : null;
+      els.sourceLabel.textContent = sourceName;
+      buildSelects();
+      render();
+    }
+
+    function buildSelects() {
+      populateSelect(els.workerFilter, "All workers", unique(state.records.map((row) => row.worker)));
+      populateSelect(els.clientFilter, "All clients", unique(state.records.map((row) => row.client).filter(Boolean)));
+      populateSelect(els.remarksFilter, "All remarks", unique(state.records.map((row) => row.remarks || "No remarks")));
+    }
+
+    function populateSelect(select, defaultLabel, options) {
+      const current = select.value;
+      select.innerHTML = "";
+      select.append(new Option(defaultLabel, "all"));
+      options.forEach((option) => select.append(new Option(option, option)));
+      select.value = options.includes(current) ? current : "all";
+    }
+
+    function render() {
+      const query = els.searchInput.value.trim().toLowerCase();
+      const worker = els.workerFilter.value;
+      const client = els.clientFilter.value;
+      const due = els.dueFilter.value;
+      const remarks = els.remarksFilter.value;
+
+      state.filtered = state.records.filter((record) => {
+        const searchable = [
+          record.worker,
+          record.jobNumber,
+          record.client,
+          record.project,
+          record.notes,
+          record.dueText,
+          record.remarks
+        ].join(" ").toLowerCase();
+
+        if (query && !searchable.includes(query)) return false;
+        if (worker !== "all" && record.worker !== worker) return false;
+        if (client !== "all" && record.client !== client) return false;
+        if (remarks !== "all" && (record.remarks || "No remarks") !== remarks) return false;
+        if (due !== "all" && record.dueBucket !== due) return false;
+        return true;
+      });
+
+      sortRecords(state.filtered, els.sortSelect.value);
+      renderKpis();
+      renderAvailability();
+      renderTable();
+      renderWorkload();
+      renderDueLanes();
+      renderDetails();
+      els.lastUpdated.textContent = "Updated " + formatDateTime(new Date());
+    }
+
+    function sortRecords(records, mode) {
+      const comparers = {
+        dueAsc: (a, b) => dateSortValue(a.dueDate) - dateSortValue(b.dueDate) || textCompare(a.worker, b.worker),
+        workerAsc: (a, b) => textCompare(a.worker, b.worker) || dateSortValue(a.dueDate) - dateSortValue(b.dueDate),
+        hoursDesc: (a, b) => b.totalHours - a.totalHours || textCompare(a.worker, b.worker),
+        clientAsc: (a, b) => textCompare(a.client, b.client) || textCompare(a.project, b.project),
+        jobAsc: (a, b) => textCompare(a.jobNumber, b.jobNumber)
+      };
+      records.sort(comparers[mode] || comparers.dueAsc);
+    }
+
+    function renderKpis() {
+      const filtered = state.filtered;
+      const workers = unique(filtered.map((row) => row.worker));
+      const totalHours = filtered.reduce((sum, row) => sum + row.totalHours, 0);
+      const overdue = filtered.filter((row) => row.dueBucket === "overdue").length;
+      const soon = filtered.filter((row) => row.dueBucket === "soon").length;
+      const noted = filtered.filter((row) => row.notes).length;
+
+      els.activeJobs.textContent = filtered.length;
+      els.activeJobsHint.textContent = workers.length + plural(workers.length, " worker", " workers");
+      els.weekHours.textContent = formatNumber(totalHours);
+      els.weekHoursHint.textContent = averageHours(filtered);
+      els.overdueJobs.textContent = overdue;
+      els.overdueHint.textContent = overdue ? "Needs attention" : "None past due";
+      els.dueSoonJobs.textContent = soon;
+      els.dueSoonHint.textContent = "Due by " + formatShortDate(addDays(today, 3));
+      els.notedJobs.textContent = noted;
+      els.notedHint.textContent = noted ? "With coordination notes" : "No visible notes";
+    }
+
+    function renderAvailability() {
+      const weeks = getForecastWeeks();
+      els.thisWeekRange.textContent = formatWeekRange(weeks[0].start, weeks[0].end);
+      els.nextWeekRange.textContent = formatWeekRange(weeks[1].start, weeks[1].end);
+      els.thirdWeekRange.textContent = formatWeekRange(weeks[2].start, weeks[2].end);
+
+      const rowsByWorker = new Map();
+      state.filtered.forEach((record) => {
+        const current = rowsByWorker.get(record.worker) || { worker: record.worker, booked: [0, 0, 0] };
+        current.booked[0] += record.totalHours;
+        weeks.slice(1).forEach((week, weekIndex) => {
+          if (isInDateRange(record.dueDate, week.start, week.end)) {
+            current.booked[weekIndex + 1] += record.totalHours;
+          }
+        });
+        rowsByWorker.set(record.worker, current);
+      });
+
+      const rows = [...rowsByWorker.values()].sort((a, b) => {
+        return b.booked[0] - a.booked[0] || textCompare(a.worker, b.worker);
+      });
+
+      const thisWeekAvailable = rows.reduce((sum, row) => {
+        return sum + Math.max(0, state.weeklyCapacity - row.booked[0]);
+      }, 0);
+      const thisWeekBooked = rows.reduce((sum, row) => sum + row.booked[0], 0);
+
+      els.availabilitySummary.textContent = `${formatNumber(thisWeekBooked)}h booked this week / ${formatNumber(thisWeekAvailable)}h free`;
+      els.availabilityRows.innerHTML = "";
+
+      const fragment = document.createDocumentFragment();
+      rows.forEach((row) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="availability-worker">${escapeHtml(row.worker)}</td>
+          ${row.booked.map((booked) => availabilityCell(booked)).join("")}
+          <td class="capacity-cell">${formatNumber(state.weeklyCapacity)}h</td>
+        `;
+        fragment.append(tr);
+      });
+
+      els.availabilityRows.append(fragment);
+      els.availabilityEmpty.style.display = rows.length ? "none" : "block";
+    }
+
+    function availabilityCell(booked) {
+      const available = state.weeklyCapacity - booked;
+      const className = available < 0 ? "week-cell overbooked" : "week-cell";
+      const availabilityClass = available < 0 ? "over" : "free";
+      return `
+        <td>
+          <div class="${className}">
+            <strong>${formatNumber(booked)}h booked</strong>
+            <span class="${availabilityClass}">${formatAvailabilityHours(available)}</span>
+          </div>
+        </td>
+      `;
+    }
+
+    function renderTable() {
+      els.projectRows.innerHTML = "";
+      const fragment = document.createDocumentFragment();
+
+      state.filtered.forEach((record) => {
+        const tr = document.createElement("tr");
+        tr.dataset.id = record.id;
+        if (record.id === state.selectedId) tr.classList.add("selected");
+
+        tr.innerHTML = `
+          <td>${escapeHtml(record.worker)}</td>
+          <td><span class="job">${escapeHtml(record.jobNumber || "-")}</span></td>
+          <td class="project-cell">
+            <div class="project-name">${escapeHtml(record.project || "-")}</div>
+            <div class="client">${escapeHtml(record.client || "-")}</div>
+          </td>
+          ${dayKeys.map((key) => `<td class="compact">${displayHour(record.hours[key])}</td>`).join("")}
+          <td class="compact"><strong>${displayHour(record.totalHours)}</strong></td>
+          <td class="notes-cell">${escapeHtml(record.notes || "")}</td>
+          <td>${duePill(record)}</td>
+          <td>${remarksPill(record.remarks)}</td>
+        `;
+
+        tr.addEventListener("click", () => {
+          state.selectedId = record.id;
+          renderTable();
+          renderDetails();
+        });
+
+        fragment.append(tr);
+      });
+
+      els.projectRows.append(fragment);
+      els.emptyState.style.display = state.filtered.length ? "none" : "block";
+      els.tableCount.textContent = state.filtered.length + plural(state.filtered.length, " row", " rows");
+    }
+
+    function renderWorkload() {
+      const totals = new Map();
+      state.filtered.forEach((record) => {
+        const current = totals.get(record.worker) || { hours: 0, jobs: 0, overdue: 0 };
+        current.hours += record.totalHours;
+        current.jobs += 1;
+        current.overdue += record.dueBucket === "overdue" ? 1 : 0;
+        totals.set(record.worker, current);
+      });
+
+      const workers = [...totals.entries()]
+        .map(([worker, data]) => ({ worker, ...data }))
+        .sort((a, b) => b.hours - a.hours || textCompare(a.worker, b.worker));
+      const maxHours = Math.max(1, ...workers.map((row) => row.hours));
+
+      els.workload.innerHTML = "";
+      workers.forEach((row) => {
+        const item = document.createElement("div");
+        item.className = "worker-row";
+        item.innerHTML = `
+          <div class="worker-meta">
+            <strong>${escapeHtml(row.worker)}</strong>
+            <span>${formatNumber(row.hours)}h / ${row.jobs}${plural(row.jobs, " job", " jobs")}${row.overdue ? " / " + row.overdue + " late" : ""}</span>
+          </div>
+          <div class="bar" aria-hidden="true"><div class="bar-fill" style="width:${Math.round((row.hours / maxHours) * 100)}%"></div></div>
+        `;
+        els.workload.append(item);
+      });
+
+      if (!workers.length) {
+        els.workload.innerHTML = `<div class="empty">No workload to show.</div>`;
+      }
+
+      els.workloadCount.textContent = workers.length + plural(workers.length, " worker", " workers");
+    }
+
+    function renderDueLanes() {
+      const lanes = [
+        { key: "overdue", title: "Overdue", className: "red" },
+        { key: "soon", title: "Next 3 days", className: "amber" },
+        { key: "future", title: "Future", className: "green" },
+        { key: "none", title: "No due date", className: "gray" }
+      ];
+
+      els.dueLanes.innerHTML = "";
+      lanes.forEach((lane) => {
+        const rows = state.filtered.filter((record) => record.dueBucket === lane.key).slice(0, 4);
+        const count = state.filtered.filter((record) => record.dueBucket === lane.key).length;
+        const item = document.createElement("div");
+        item.className = "lane";
+        item.innerHTML = `
+          <div class="lane-head">
+            <span>${lane.title}</span>
+            <span class="pill ${lane.className}">${count}</span>
+          </div>
+          <ul>
+            ${rows.length ? rows.map((record) => `<li>${escapeHtml(record.worker)}: ${escapeHtml(record.project || record.jobNumber || "Untitled")}</li>`).join("") : `<li>No rows</li>`}
+          </ul>
+        `;
+        els.dueLanes.append(item);
+      });
+    }
+
+    function renderDetails() {
+      const selected = state.records.find((record) => record.id === state.selectedId);
+      if (!selected) {
+        els.selectedHint.textContent = "Click a project";
+        els.detailPanel.innerHTML = `<div class="empty">No row selected.</div>`;
+        return;
+      }
+
+      els.selectedHint.textContent = selected.worker;
+      els.detailPanel.innerHTML = `
+        <div class="detail-item">
+          <span>Project</span>
+          <strong>${escapeHtml(selected.project || "-")}</strong>
+        </div>
+        <div class="detail-item">
+          <span>Client</span>
+          <div>${escapeHtml(selected.client || "-")}</div>
+        </div>
+        <div class="detail-item">
+          <span>Job Number</span>
+          <div>${escapeHtml(selected.jobNumber || "-")}</div>
+        </div>
+        <div class="detail-item">
+          <span>Hours</span>
+          <div>${dayKeys.map((key) => `${dayLabels[key]} ${displayHour(selected.hours[key])}`).join(" | ")} | Total ${displayHour(selected.totalHours)}</div>
+        </div>
+        <div class="detail-item">
+          <span>Due</span>
+          <div>${formatShortDate(selected.dueDate) || selected.dueText || "-"}</div>
+        </div>
+        <div class="detail-item">
+          <span>Notes</span>
+          <div>${escapeHtml(selected.notes || "-")}</div>
+        </div>
+        <div class="detail-item">
+          <span>Remarks</span>
+          <div>${escapeHtml(selected.remarks || "-")}</div>
+        </div>
+      `;
+    }
+
+    function finalizeRecord(record, index) {
+      const hours = {};
+      dayKeys.forEach((key) => {
+        hours[key] = toNumber(record.hours && record.hours[key]);
+      });
+      const dueDate = record.dueDate || parseDueDate(record.dueText);
+      const totalHours = dayKeys.reduce((sum, key) => sum + hours[key], 0);
+
+      return {
+        id: record.id || "row-" + index,
+        worker: clean(record.worker) || "Unassigned",
+        sheetName: clean(record.sheetName),
+        rowNumber: record.rowNumber || "",
+        jobNumber: clean(record.jobNumber),
+        client: clean(record.client),
+        project: clean(record.project),
+        hours,
+        totalHours,
+        notes: clean(record.notes),
+        dueText: clean(record.dueText),
+        dueDate,
+        dueBucket: getDueBucket(dueDate),
+        remarks: clean(record.remarks)
+      };
+    }
+
+    function duePill(record) {
+      const label = formatShortDate(record.dueDate) || record.dueText || "No due";
+      const classes = {
+        overdue: "red",
+        soon: "amber",
+        future: "green",
+        none: "gray"
+      };
+      return `<span class="pill ${classes[record.dueBucket]}">${escapeHtml(label)}</span>`;
+    }
+
+    function remarksPill(remarks) {
+      if (!remarks) return `<span class="pill gray">No remarks</span>`;
+      const normalized = remarks.toLowerCase();
+      let className = "blue";
+      if (normalized.includes("review")) className = "amber";
+      if (normalized.includes("sent")) className = "green";
+      if (normalized.includes("hold") || normalized.includes("waiting")) className = "red";
+      return `<span class="pill ${className}">${escapeHtml(remarks)}</span>`;
+    }
+
+    function exportCsv() {
+      const header = ["Worker", "Job Number", "Client", "Project", "M", "T", "W", "T", "F", "Total", "Notes", "Due", "Remarks"];
+      const rows = state.filtered.map((record) => [
+        record.worker,
+        record.jobNumber,
+        record.client,
+        record.project,
+        record.hours.mon,
+        record.hours.tue,
+        record.hours.wed,
+        record.hours.thu,
+        record.hours.fri,
+        record.totalHours,
+        record.notes,
+        formatShortDate(record.dueDate) || record.dueText,
+        record.remarks
+      ]);
+
+      const csv = [header, ...rows]
+        .map((row) => row.map(csvValue).join(","))
+        .join("\r\n");
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "project-dashboard-export.csv";
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function getDueBucket(date) {
+      if (!date) return "none";
+      if (date < today) return "overdue";
+      if (date <= addDays(today, 3)) return "soon";
+      return "future";
+    }
+
+    function getForecastWeeks() {
+      const weekStart = startOfWeek(today);
+      return [
+        { start: weekStart, end: addDays(weekStart, 7) },
+        { start: addDays(weekStart, 7), end: addDays(weekStart, 14) },
+        { start: addDays(weekStart, 14), end: addDays(weekStart, 21) }
+      ];
+    }
+
+    function startOfWeek(date) {
+      const result = startOfDay(date);
+      const day = result.getDay();
+      const offset = day === 0 ? -6 : 1 - day;
+      result.setDate(result.getDate() + offset);
+      return result;
+    }
+
+    function isInDateRange(date, start, end) {
+      return Boolean(date && date >= start && date < end);
+    }
+
+    function formatWeekRange(start, end) {
+      const finalDay = addDays(end, -1);
+      const startMonth = new Intl.DateTimeFormat("en", { month: "short" }).format(start);
+      const endMonth = new Intl.DateTimeFormat("en", { month: "short" }).format(finalDay);
+      const startDay = new Intl.DateTimeFormat("en", { day: "2-digit" }).format(start);
+      const endDay = new Intl.DateTimeFormat("en", { day: "2-digit" }).format(finalDay);
+      return startMonth === endMonth
+        ? `${startMonth} ${startDay}-${endDay}`
+        : `${startMonth} ${startDay}-${endMonth} ${endDay}`;
+    }
+
+    function formatAvailabilityHours(value) {
+      if (value >= 0) return formatNumber(value) + "h free";
+      return formatNumber(Math.abs(value)) + "h over";
+    }
+
+    function readStoredCapacity() {
+      try {
+        const stored = localStorage.getItem(CAPACITY_STORAGE_KEY);
+        const parsed = stored === null ? DEFAULT_WEEKLY_CAPACITY : Number(stored);
+        return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_WEEKLY_CAPACITY;
+      } catch {
+        return DEFAULT_WEEKLY_CAPACITY;
+      }
+    }
+
+    function saveWeeklyCapacity(value) {
+      try {
+        localStorage.setItem(CAPACITY_STORAGE_KEY, String(value));
+      } catch {
+        // Ignore storage failures for local file contexts.
+      }
+    }
+
+    function parseDueDate(value) {
+      if (value instanceof Date && !Number.isNaN(value.valueOf())) return startOfDay(value);
+      if (typeof value === "number" && Number.isFinite(value)) {
+        return startOfDay(new Date(Math.round((value - 25569) * 86400 * 1000)));
+      }
+
+      const text = clean(value);
+      if (!text) return null;
+
+      const dayMonthMatch = text.match(/^(\d{1,2})[-\s/]([A-Za-z]{3,9})$/);
+      if (dayMonthMatch) {
+        const parsed = new Date(`${dayMonthMatch[1]} ${dayMonthMatch[2]} ${currentYear}`);
+        return Number.isNaN(parsed.valueOf()) ? null : startOfDay(parsed);
+      }
+
+      const parsed = new Date(text);
+      return Number.isNaN(parsed.valueOf()) ? null : startOfDay(parsed);
+    }
+
+    function startOfDay(date) {
+      return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    }
+
+    function addDays(date, days) {
+      const next = new Date(date);
+      next.setDate(next.getDate() + days);
+      return next;
+    }
+
+    function dateSortValue(date) {
+      return date ? date.getTime() : Number.MAX_SAFE_INTEGER;
+    }
+
+    function formatShortDate(date) {
+      if (!date) return "";
+      return new Intl.DateTimeFormat("en", { day: "2-digit", month: "short" }).format(date);
+    }
+
+    function formatDateTime(date) {
+      return new Intl.DateTimeFormat("en", {
+        month: "short",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit"
+      }).format(date);
+    }
+
+    function formatNumber(value) {
+      return new Intl.NumberFormat("en", { maximumFractionDigits: 1 }).format(value || 0);
+    }
+
+    function displayHour(value) {
+      return value ? formatNumber(value) : "";
+    }
+
+    function averageHours(rows) {
+      if (!rows.length) return "0 hours per row";
+      const total = rows.reduce((sum, row) => sum + row.totalHours, 0);
+      return formatNumber(total / rows.length) + "h average";
+    }
+
+    function textCompare(a, b) {
+      return String(a || "").localeCompare(String(b || ""), undefined, { numeric: true, sensitivity: "base" });
+    }
+
+    function toNumber(value) {
+      if (value === undefined || value === null || value === "") return 0;
+      const numeric = Number(String(value).replace(/,/g, "").trim());
+      return Number.isFinite(numeric) ? numeric : 0;
+    }
+
+    function clean(value) {
+      if (value === undefined || value === null) return "";
+      return String(value).replace(/\s+/g, " ").trim();
+    }
+
+    function normalizeHeader(value) {
+      return clean(value).toLowerCase().replace(/[^a-z0-9]/g, "");
+    }
+
+    function range(start, end) {
+      const values = [];
+      for (let index = start; index < end; index += 1) values.push(index);
+      return values;
+    }
+
+    function unique(values) {
+      return [...new Set(values.filter(Boolean))].sort(textCompare);
+    }
+
+    function plural(count, singular, pluralText) {
+      return count === 1 ? singular : pluralText;
+    }
+
+    function csvValue(value) {
+      const text = String(value ?? "");
+      return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function showNotice(message) {
+      els.notice.textContent = message;
+      els.notice.classList.add("visible");
+    }
+
+    function hideNotice() {
+      els.notice.classList.remove("visible");
+      els.notice.textContent = "";
+    }
+  </script>
+</body>
+</html>
