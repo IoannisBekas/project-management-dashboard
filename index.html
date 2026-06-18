@@ -73,6 +73,13 @@
       background: #f9fbfa;
     }
 
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+      border-color: var(--line);
+      background: var(--surface-2);
+    }
+
     button.primary,
     .file-button.primary {
       background: var(--red);
@@ -270,6 +277,45 @@
     .planner-panel {
       display: grid;
       gap: 0;
+    }
+
+    .entry-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(150px, 1fr));
+      gap: 10px;
+      padding: 14px 16px;
+    }
+
+    .entry-grid .wide {
+      grid-column: span 2;
+    }
+
+    .entry-grid .full {
+      grid-column: 1 / -1;
+    }
+
+    .hours-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(58px, 1fr));
+      gap: 8px;
+    }
+
+    .entry-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 0 16px 14px;
+    }
+
+    .entry-status {
+      margin: 0 16px 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fbfcfb;
+      color: var(--muted);
+      padding: 10px 12px;
+      font-size: 13px;
+      line-height: 1.35;
     }
 
     .planner-grid {
@@ -763,6 +809,19 @@
         grid-template-columns: 1fr;
       }
 
+      .entry-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .entry-grid .wide,
+      .entry-grid .full {
+        grid-column: auto;
+      }
+
+      .hours-grid {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+      }
+
       .availability-summary-grid {
         grid-template-columns: 1fr;
       }
@@ -902,6 +961,66 @@
             <option value="jobAsc">Job number</option>
           </select>
         </label>
+      </section>
+
+      <section class="panel" aria-label="Manual project entry">
+        <div class="panel-header">
+          <div>
+            <h2>Project Entry</h2>
+            <p id="entrySummary">No browser-saved rows</p>
+          </div>
+        </div>
+        <form id="entryForm" autocomplete="off">
+          <div class="entry-grid">
+            <label>
+              Worker
+              <input id="entryWorker" type="text" placeholder="David August">
+            </label>
+            <label>
+              Job Number
+              <input id="entryJobNumber" type="text" placeholder="26-0124">
+            </label>
+            <label class="wide">
+              Client
+              <input id="entryClient" type="text" placeholder="Client name">
+            </label>
+            <label class="wide">
+              Project
+              <input id="entryProject" type="text" placeholder="Project name">
+            </label>
+            <label class="wide">
+              Notes
+              <input id="entryNotes" type="text" placeholder="Coordination notes">
+            </label>
+            <label>
+              Due
+              <input id="entryDue" type="text" placeholder="19-Jun">
+            </label>
+            <label>
+              Remarks
+              <input id="entryRemarks" type="text" placeholder="UNDER REVIEW">
+            </label>
+            <div class="full">
+              <label>
+                Hours
+                <div class="hours-grid">
+                  <input id="entryMon" type="number" min="0" step="0.25" placeholder="M">
+                  <input id="entryTue" type="number" min="0" step="0.25" placeholder="T">
+                  <input id="entryWed" type="number" min="0" step="0.25" placeholder="W">
+                  <input id="entryThu" type="number" min="0" step="0.25" placeholder="T">
+                  <input id="entryFri" type="number" min="0" step="0.25" placeholder="F">
+                </div>
+              </label>
+            </div>
+          </div>
+          <div class="entry-actions">
+            <button type="submit" class="primary" id="entrySaveButton">Save Row</button>
+            <button type="button" id="entryLoadSelectedButton">Load Selected</button>
+            <button type="button" id="entryResetButton">New Row</button>
+            <button type="button" id="entryDeleteButton">Delete Saved Row</button>
+          </div>
+          <div class="entry-status" id="entryStatus">Rows entered here are saved in this browser and included in dashboard totals.</div>
+        </form>
       </section>
 
       <section class="panel planner-panel" aria-label="Microsoft Planner feed">
@@ -1058,6 +1177,7 @@
     const today = startOfDay(new Date());
     const DEFAULT_WEEKLY_CAPACITY = 40;
     const CAPACITY_STORAGE_KEY = "projectDashboard.weeklyCapacity";
+    const MANUAL_RECORDS_KEY = "projectDashboard.manualRecords";
     const PLANNER_CLIENT_ID_KEY = "projectDashboard.plannerClientId";
     const PLANNER_TENANT_ID_KEY = "projectDashboard.plannerTenantId";
     const PLANNER_DEFAULT_HOURS_KEY = "projectDashboard.plannerDefaultHours";
@@ -1065,9 +1185,13 @@
     const LIVE_DASHBOARD_URL = "https://ioannisbekas.github.io/project-management-dashboard/";
 
     const state = {
+      baseRecords: [],
+      manualRecords: readManualRecords(),
+      plannerRecords: [],
       records: [],
       filtered: [],
       selectedId: null,
+      entryEditingId: null,
       sourceName: "Sample workbook data",
       weeklyCapacity: readStoredCapacity(),
       plannerClient: null,
@@ -1089,6 +1213,25 @@
       dueFilter: document.getElementById("dueFilter"),
       remarksFilter: document.getElementById("remarksFilter"),
       sortSelect: document.getElementById("sortSelect"),
+      entrySummary: document.getElementById("entrySummary"),
+      entryForm: document.getElementById("entryForm"),
+      entryWorker: document.getElementById("entryWorker"),
+      entryJobNumber: document.getElementById("entryJobNumber"),
+      entryClient: document.getElementById("entryClient"),
+      entryProject: document.getElementById("entryProject"),
+      entryNotes: document.getElementById("entryNotes"),
+      entryDue: document.getElementById("entryDue"),
+      entryRemarks: document.getElementById("entryRemarks"),
+      entryMon: document.getElementById("entryMon"),
+      entryTue: document.getElementById("entryTue"),
+      entryWed: document.getElementById("entryWed"),
+      entryThu: document.getElementById("entryThu"),
+      entryFri: document.getElementById("entryFri"),
+      entrySaveButton: document.getElementById("entrySaveButton"),
+      entryLoadSelectedButton: document.getElementById("entryLoadSelectedButton"),
+      entryResetButton: document.getElementById("entryResetButton"),
+      entryDeleteButton: document.getElementById("entryDeleteButton"),
+      entryStatus: document.getElementById("entryStatus"),
       plannerSummary: document.getElementById("plannerSummary"),
       plannerClientId: document.getElementById("plannerClientId"),
       plannerTenantId: document.getElementById("plannerTenantId"),
@@ -1239,6 +1382,10 @@
       els.sampleButton.addEventListener("click", () => setRecords(sampleRecords, "Sample workbook data"));
       els.exportButton.addEventListener("click", exportCsv);
       els.printButton.addEventListener("click", () => window.print());
+      els.entryForm.addEventListener("submit", saveEntryRecord);
+      els.entryLoadSelectedButton.addEventListener("click", loadSelectedIntoEntryForm);
+      els.entryResetButton.addEventListener("click", resetEntryForm);
+      els.entryDeleteButton.addEventListener("click", deleteSelectedManualRecord);
       els.weeklyCapacityInput.addEventListener("input", () => {
         state.weeklyCapacity = Math.max(0, toNumber(els.weeklyCapacityInput.value));
         saveWeeklyCapacity(state.weeklyCapacity);
@@ -1414,12 +1561,17 @@
     }
 
     function setRecords(records, sourceName) {
-      state.records = records.map((record, index) => finalizeRecord(record, index + 1));
+      state.baseRecords = records.map((record, index) => finalizeRecord(record, index + 1));
       state.sourceName = sourceName;
+      mergeRecords();
       state.selectedId = state.records[0] ? state.records[0].id : null;
       els.sourceLabel.textContent = sourceName;
       buildSelects();
       render();
+    }
+
+    function mergeRecords() {
+      state.records = [...state.baseRecords, ...state.manualRecords, ...state.plannerRecords];
     }
 
     function buildSelects() {
@@ -1434,6 +1586,123 @@
       select.append(new Option(defaultLabel, "all"));
       options.forEach((option) => select.append(new Option(option, option)));
       select.value = options.includes(current) ? current : "all";
+    }
+
+    function saveEntryRecord(event) {
+      event.preventDefault();
+      const draft = readEntryForm();
+
+      if (!draft.worker || !draft.project) {
+        setEntryStatus("Worker and project are required before saving.");
+        return;
+      }
+
+      const existingIndex = state.manualRecords.findIndex((record) => record.id === state.entryEditingId);
+      const id = existingIndex >= 0 ? state.entryEditingId : `manual-${Date.now()}`;
+      const savedRecord = finalizeRecord({ ...draft, id, sourceType: "manual" }, state.baseRecords.length + existingIndex + 1);
+
+      if (existingIndex >= 0) {
+        state.manualRecords.splice(existingIndex, 1, savedRecord);
+        setEntryStatus("Saved row updated in this browser.");
+      } else {
+        state.manualRecords.push(savedRecord);
+        setEntryStatus("New row saved in this browser.");
+      }
+
+      saveManualRecords();
+      mergeRecords();
+      state.selectedId = savedRecord.id;
+      buildSelects();
+      resetEntryForm(false);
+      render();
+    }
+
+    function readEntryForm() {
+      return {
+        worker: clean(els.entryWorker.value),
+        jobNumber: clean(els.entryJobNumber.value),
+        client: clean(els.entryClient.value),
+        project: clean(els.entryProject.value),
+        hours: {
+          mon: toNumber(els.entryMon.value),
+          tue: toNumber(els.entryTue.value),
+          wed: toNumber(els.entryWed.value),
+          thu: toNumber(els.entryThu.value),
+          fri: toNumber(els.entryFri.value)
+        },
+        notes: clean(els.entryNotes.value),
+        dueText: clean(els.entryDue.value),
+        remarks: clean(els.entryRemarks.value)
+      };
+    }
+
+    function loadSelectedIntoEntryForm() {
+      const selected = state.records.find((record) => record.id === state.selectedId);
+      if (!selected) {
+        setEntryStatus("Select a project row first.");
+        return;
+      }
+
+      writeEntryForm(selected);
+      state.entryEditingId = selected.sourceType === "manual" ? selected.id : null;
+      renderEntryState();
+      setEntryStatus(selected.sourceType === "manual"
+        ? "Loaded saved row for editing."
+        : "Loaded selected row as a new browser-saved copy.");
+    }
+
+    function writeEntryForm(record) {
+      els.entryWorker.value = record.worker || "";
+      els.entryJobNumber.value = record.jobNumber || "";
+      els.entryClient.value = record.client || "";
+      els.entryProject.value = record.project || "";
+      els.entryMon.value = displayInputHour(record.hours.mon);
+      els.entryTue.value = displayInputHour(record.hours.tue);
+      els.entryWed.value = displayInputHour(record.hours.wed);
+      els.entryThu.value = displayInputHour(record.hours.thu);
+      els.entryFri.value = displayInputHour(record.hours.fri);
+      els.entryNotes.value = record.notes || "";
+      els.entryDue.value = record.dueText || formatShortDate(record.dueDate) || "";
+      els.entryRemarks.value = record.remarks || "";
+    }
+
+    function resetEntryForm(clearStatus = true) {
+      state.entryEditingId = null;
+      els.entryForm.reset();
+      renderEntryState();
+      if (clearStatus) setEntryStatus("Ready for a new row.");
+    }
+
+    function deleteSelectedManualRecord() {
+      const selected = state.records.find((record) => record.id === state.selectedId);
+      if (!selected || selected.sourceType !== "manual") {
+        setEntryStatus("Only rows saved in this dashboard can be deleted here.");
+        return;
+      }
+
+      state.manualRecords = state.manualRecords.filter((record) => record.id !== selected.id);
+      saveManualRecords();
+      mergeRecords();
+      state.selectedId = state.records[0] ? state.records[0].id : null;
+      buildSelects();
+      resetEntryForm(false);
+      render();
+      setEntryStatus("Saved row deleted from this browser.");
+    }
+
+    function renderEntryState() {
+      const manualCount = state.manualRecords.length;
+      const selected = state.records.find((record) => record.id === state.selectedId);
+      els.entrySummary.textContent = manualCount
+        ? `${manualCount} browser-saved ${manualCount === 1 ? "row" : "rows"}`
+        : "No browser-saved rows";
+      els.entrySaveButton.textContent = state.entryEditingId ? "Update Row" : "Save Row";
+      els.entryLoadSelectedButton.disabled = !selected;
+      els.entryDeleteButton.disabled = !selected || selected.sourceType !== "manual";
+    }
+
+    function setEntryStatus(message) {
+      els.entryStatus.textContent = message;
     }
 
     function initPlannerPanel() {
@@ -1520,8 +1789,8 @@
           .filter((task) => task.percentComplete !== 100)
           .flatMap((task, index) => plannerTaskToRecords(task, plan, bucketNames, users, index));
 
-        state.records = state.records.filter((record) => record.sourceType !== "planner");
-        state.records.push(...records.map((record, index) => finalizeRecord(record, state.records.length + index + 1)));
+        state.plannerRecords = records.map((record, index) => finalizeRecord(record, state.baseRecords.length + state.manualRecords.length + index + 1));
+        mergeRecords();
         state.selectedId = state.records[0] ? state.records[0].id : null;
         buildSelects();
         render();
@@ -1535,8 +1804,9 @@
     }
 
     function clearPlannerRecords() {
-      const before = state.records.length;
-      state.records = state.records.filter((record) => record.sourceType !== "planner");
+      const before = state.plannerRecords.length;
+      state.plannerRecords = [];
+      mergeRecords();
       if (state.selectedId && !state.records.some((record) => record.id === state.selectedId)) {
         state.selectedId = state.records[0] ? state.records[0].id : null;
       }
@@ -1544,7 +1814,7 @@
       render();
       updatePlannerSummary();
       els.sourceLabel.textContent = state.sourceName;
-      setPlannerStatus(`${before - state.records.length} Planner task rows cleared.`, "success");
+      setPlannerStatus(`${before} Planner task rows cleared.`, "success");
     }
 
     async function getPlannerClient() {
@@ -1773,6 +2043,7 @@
       renderWorkload();
       renderDueLanes();
       renderDetails();
+      renderEntryState();
       updatePlannerSummary();
       els.lastUpdated.textContent = "Updated " + formatDateTime(new Date());
     }
@@ -1910,6 +2181,7 @@
           state.selectedId = record.id;
           renderTable();
           renderDetails();
+          renderEntryState();
         });
 
         fragment.append(tr);
@@ -2020,6 +2292,10 @@
         <div class="detail-item">
           <span>Remarks</span>
           <div>${escapeHtml(selected.remarks || "-")}</div>
+        </div>
+        <div class="detail-item">
+          <span>Source</span>
+          <div>${escapeHtml(sourceLabel(selected.sourceType))}</div>
         </div>
       `;
     }
@@ -2171,6 +2447,41 @@
       }
     }
 
+    function readManualRecords() {
+      try {
+        const stored = localStorage.getItem(MANUAL_RECORDS_KEY);
+        if (!stored) return [];
+        const parsed = JSON.parse(stored);
+        if (!Array.isArray(parsed)) return [];
+        return parsed.map((record, index) => finalizeRecord({ ...record, sourceType: "manual" }, 100000 + index));
+      } catch {
+        return [];
+      }
+    }
+
+    function saveManualRecords() {
+      try {
+        localStorage.setItem(MANUAL_RECORDS_KEY, JSON.stringify(state.manualRecords.map(serializeRecord)));
+      } catch {
+        setEntryStatus("Could not save rows in browser storage.");
+      }
+    }
+
+    function serializeRecord(record) {
+      return {
+        id: record.id,
+        sourceType: record.sourceType,
+        worker: record.worker,
+        jobNumber: record.jobNumber,
+        client: record.client,
+        project: record.project,
+        hours: record.hours,
+        notes: record.notes,
+        dueText: record.dueText,
+        remarks: record.remarks
+      };
+    }
+
     function parseDueDate(value) {
       if (value instanceof Date && !Number.isNaN(value.valueOf())) return startOfDay(value);
       if (typeof value === "number" && Number.isFinite(value)) {
@@ -2226,10 +2537,23 @@
       return value ? formatNumber(value) : "";
     }
 
+    function displayInputHour(value) {
+      return value ? String(value) : "";
+    }
+
     function averageHours(rows) {
       if (!rows.length) return "0 hours per row";
       const total = rows.reduce((sum, row) => sum + row.totalHours, 0);
       return formatNumber(total / rows.length) + "h average";
+    }
+
+    function sourceLabel(sourceType) {
+      const labels = {
+        excel: "Excel / sample data",
+        manual: "Dashboard entry",
+        planner: "Microsoft Planner"
+      };
+      return labels[sourceType] || sourceType || "Unknown";
     }
 
     function textCompare(a, b) {

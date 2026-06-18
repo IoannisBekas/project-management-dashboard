@@ -11,6 +11,7 @@ Standalone JavaScript dashboard for combining worker Excel sheets into one proje
 - View worker workload and weekly availability
 - Adjust weekly worker capacity
 - Import Microsoft Planner tasks from Microsoft Graph
+- Add, edit, and delete project rows directly in the dashboard
 - Export filtered rows to CSV
 - Print the dashboard
 
@@ -25,6 +26,12 @@ The expected workbook layout is:
 - Worker name in the first row or as the sheet name
 
 No server is required.
+
+## Dashboard Entry
+
+Use the **Project Entry** panel to add the same fields that appear in the worker spreadsheets: worker, job number, client, project, weekday hours, notes, due date, and remarks.
+
+Rows entered this way are saved in the current browser with `localStorage`, included in dashboard totals, and exported with CSV. They are not shared with other users and do not write back into the original Excel workbook.
 
 ## Microsoft Planner Feed
 
