@@ -27,11 +27,11 @@ The expected workbook layout is:
 
 No server is required.
 
-## Dashboard Entry
+## Table Editing
 
-Use the **Project Entry** panel to add the same fields that appear in the worker spreadsheets: worker, job number, client, project, weekday hours, notes, due date, and remarks.
+Use the **Projects** table to edit the same fields that appear in the worker spreadsheets: worker, job number, client, project, weekday hours, notes, due date, and remarks. Click a cell, type the change, then press Enter or click away.
 
-Rows entered this way are saved in the current browser with `localStorage`, included in dashboard totals, and exported with CSV. They are not shared with other users and do not write back into the original Excel workbook.
+Use **New Row** to add a browser-saved row. Imported Excel or Planner rows edited in the table are saved as browser-local overrides, included in dashboard totals, and exported with CSV. They are not shared with other users and do not write back into Excel or Planner.
 
 ## Microsoft Planner Feed
 

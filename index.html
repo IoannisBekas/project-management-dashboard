@@ -398,6 +398,37 @@
       font-size: 13px;
     }
 
+    .table-tools {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .status-line {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .table-edit-status {
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfb;
+      color: var(--muted);
+      padding: 10px 16px;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .table-edit-status.success {
+      color: var(--green);
+    }
+
+    .table-edit-status.error {
+      color: var(--red);
+    }
+
     .panel-header-tools {
       display: flex;
       align-items: end;
@@ -593,6 +624,60 @@
       min-width: 170px;
       color: #3e4942;
       line-height: 1.35;
+    }
+
+    .editable {
+      display: inline-block;
+      max-width: 100%;
+      min-width: 34px;
+      min-height: 22px;
+      border-radius: 4px;
+      outline: none;
+      padding: 2px 4px;
+      cursor: text;
+      overflow-wrap: normal;
+      word-break: normal;
+    }
+
+    .editable:hover {
+      background: #fff;
+      box-shadow: inset 0 0 0 1px var(--line);
+    }
+
+    .editable:focus {
+      background: #fff;
+      box-shadow: 0 0 0 3px rgba(183, 31, 42, 0.14), inset 0 0 0 1px var(--red);
+    }
+
+    .editable.empty-value:empty::before {
+      content: attr(data-placeholder);
+      color: var(--muted);
+      opacity: 0.8;
+    }
+
+    .editable.project-name,
+    .editable.client,
+    .editable.notes-edit {
+      display: block;
+    }
+
+    .editable.project-name,
+    .editable.notes-edit {
+      overflow-wrap: anywhere;
+    }
+
+    .job.editable {
+      white-space: nowrap;
+    }
+
+    .editable.hour-edit {
+      min-width: 34px;
+      text-align: center;
+    }
+
+    .editable-pill {
+      min-width: 72px;
+      justify-content: center;
     }
 
     .pill {
@@ -835,6 +920,11 @@
         flex-direction: column;
       }
 
+      .table-tools {
+        width: 100%;
+        justify-content: flex-start;
+      }
+
       .panel-header-tools,
       .capacity-control {
         width: 100%;
@@ -963,7 +1053,7 @@
         </label>
       </section>
 
-      <section class="panel" aria-label="Manual project entry">
+      <section class="panel" aria-label="Manual project entry" hidden>
         <div class="panel-header">
           <div>
             <h2>Project Entry</h2>
@@ -1113,8 +1203,13 @@
               <h2>Projects</h2>
               <p id="tableCount">0 rows</p>
             </div>
-            <div class="status-line" id="lastUpdated"></div>
+            <div class="table-tools">
+              <button type="button" id="tableAddRowButton">New Row</button>
+              <button type="button" id="tableDeleteRowButton">Delete Saved Row</button>
+              <div class="status-line" id="lastUpdated"></div>
+            </div>
           </div>
+          <div class="table-edit-status" id="tableEditStatus">Click any editable cell in the table to update the dashboard. Edits are saved in this browser.</div>
           <div class="table-wrap">
             <table>
               <thead>
@@ -1267,6 +1362,9 @@
       thirdWeekRange: document.getElementById("thirdWeekRange"),
       tableCount: document.getElementById("tableCount"),
       lastUpdated: document.getElementById("lastUpdated"),
+      tableAddRowButton: document.getElementById("tableAddRowButton"),
+      tableDeleteRowButton: document.getElementById("tableDeleteRowButton"),
+      tableEditStatus: document.getElementById("tableEditStatus"),
       projectRows: document.getElementById("projectRows"),
       emptyState: document.getElementById("emptyState"),
       workload: document.getElementById("workload"),
@@ -1386,6 +1484,10 @@
       els.entryLoadSelectedButton.addEventListener("click", loadSelectedIntoEntryForm);
       els.entryResetButton.addEventListener("click", resetEntryForm);
       els.entryDeleteButton.addEventListener("click", deleteSelectedManualRecord);
+      els.tableAddRowButton.addEventListener("click", addTableRow);
+      els.tableDeleteRowButton.addEventListener("click", deleteSelectedTableRow);
+      els.projectRows.addEventListener("focusout", handleTableEdit, true);
+      els.projectRows.addEventListener("keydown", handleTableEditKeydown);
       els.weeklyCapacityInput.addEventListener("input", () => {
         state.weeklyCapacity = Math.max(0, toNumber(els.weeklyCapacityInput.value));
         saveWeeklyCapacity(state.weeklyCapacity);
@@ -1571,7 +1673,27 @@
     }
 
     function mergeRecords() {
-      state.records = [...state.baseRecords, ...state.manualRecords, ...state.plannerRecords];
+      const sourceRecords = [...state.baseRecords, ...state.plannerRecords];
+      const sourceIds = new Set(sourceRecords.map((record) => record.id));
+      const overrides = new Map();
+      const manualRows = [];
+      const orphanedOverrides = [];
+
+      state.manualRecords.forEach((record) => {
+        if (record.replacesId && sourceIds.has(record.replacesId)) {
+          overrides.set(record.replacesId, record);
+        } else if (record.replacesId) {
+          orphanedOverrides.push(record);
+        } else {
+          manualRows.push(record);
+        }
+      });
+
+      state.records = [
+        ...sourceRecords.map((record) => overrides.get(record.id) || record),
+        ...manualRows,
+        ...orphanedOverrides
+      ];
     }
 
     function buildSelects() {
@@ -1703,6 +1825,212 @@
 
     function setEntryStatus(message) {
       els.entryStatus.textContent = message;
+    }
+
+    function addTableRow() {
+      const id = `manual-${Date.now()}`;
+      const draft = {
+        id,
+        sourceType: "manual",
+        worker: "Unassigned",
+        jobNumber: "",
+        client: "",
+        project: "New project",
+        hours: emptyHours(),
+        notes: "",
+        dueText: "",
+        remarks: ""
+      };
+      const savedRecord = finalizeRecord(draft, 100000 + state.manualRecords.length);
+      state.manualRecords.push(savedRecord);
+      saveManualRecords();
+      mergeRecords();
+      state.selectedId = savedRecord.id;
+      clearFiltersForNewRow();
+      buildSelects();
+      render();
+      setTableEditStatus("New row added. Edit the cells directly in the Projects table.", "success");
+      focusTableCell(savedRecord.id, "project");
+    }
+
+    function deleteSelectedTableRow() {
+      const selected = state.records.find((record) => record.id === state.selectedId);
+      if (!selected || selected.sourceType !== "manual") {
+        setTableEditStatus("Select a browser-saved row or edit first, then it can be deleted here.", "error");
+        return;
+      }
+
+      state.manualRecords = state.manualRecords.filter((record) => record.id !== selected.id);
+      saveManualRecords();
+      mergeRecords();
+      state.selectedId = selected.replacesId && state.records.some((record) => record.id === selected.replacesId)
+        ? selected.replacesId
+        : (state.records[0] ? state.records[0].id : null);
+      buildSelects();
+      render();
+      setTableEditStatus(selected.replacesId
+        ? "Saved edit removed. The original feed row is visible again."
+        : "Browser-saved row deleted.");
+    }
+
+    function handleTableEdit(event) {
+      const target = event.target.closest(".editable");
+      if (!target || !els.projectRows.contains(target)) return;
+
+      const sourceId = target.dataset.id;
+      const field = target.dataset.field;
+      const nextValue = cleanEditableValue(target.textContent);
+      const originalValue = target.dataset.original || "";
+      if (!sourceId || !field || nextValue === originalValue) return;
+
+      const sourceRecord = state.records.find((record) => record.id === sourceId);
+      if (!sourceRecord) return;
+
+      const editableRecord = getEditableTableRecord(sourceRecord);
+      setRecordField(editableRecord, field, nextValue);
+      const savedRecord = finalizeRecord(editableRecord, getManualRecordIndex(editableRecord));
+      upsertManualRecord(savedRecord);
+      saveManualRecords();
+      mergeRecords();
+      state.selectedId = savedRecord.id;
+      buildSelects();
+      render();
+      setTableEditStatus("Saved table edit in this browser.", "success");
+    }
+
+    function handleTableEditKeydown(event) {
+      const target = event.target.closest(".editable");
+      if (!target) return;
+
+      if (event.key === "Enter") {
+        event.preventDefault();
+        target.blur();
+      }
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        target.textContent = target.dataset.original || "";
+        target.blur();
+      }
+    }
+
+    function getEditableTableRecord(sourceRecord) {
+      const existing = state.manualRecords.find((record) =>
+        record.id === sourceRecord.id || record.replacesId === sourceRecord.id
+      );
+      if (existing) return cloneRecord(existing);
+
+      return cloneRecord({
+        ...sourceRecord,
+        id: `manual-edit-${sourceRecord.id}`,
+        sourceType: "manual",
+        replacesId: sourceRecord.id
+      });
+    }
+
+    function setRecordField(record, field, value) {
+      if (field.startsWith("hours.")) {
+        const day = field.split(".")[1];
+        if (dayKeys.includes(day)) record.hours[day] = Math.max(0, toNumber(value));
+        return;
+      }
+
+      if (field === "dueText") {
+        record.dueText = value;
+        record.dueDate = parseDueDate(value);
+        return;
+      }
+
+      if (["worker", "jobNumber", "client", "project", "notes", "remarks"].includes(field)) {
+        record[field] = value;
+      }
+    }
+
+    function upsertManualRecord(record) {
+      const existingIndex = state.manualRecords.findIndex((item) => item.id === record.id);
+      if (existingIndex >= 0) {
+        state.manualRecords.splice(existingIndex, 1, record);
+      } else {
+        state.manualRecords.push(record);
+      }
+    }
+
+    function renderTableEditState() {
+      const manualCount = state.manualRecords.length;
+      const selected = state.records.find((record) => record.id === state.selectedId);
+      els.tableDeleteRowButton.disabled = !selected || selected.sourceType !== "manual";
+      els.tableEditStatus.textContent = manualCount
+        ? `${manualCount} browser-saved ${manualCount === 1 ? "row or edit" : "rows or edits"}. Click any editable cell to update it.`
+        : "Click any editable cell in the table to update the dashboard. Edits are saved in this browser.";
+      els.tableEditStatus.className = "table-edit-status";
+    }
+
+    function setTableEditStatus(message, type = "") {
+      els.tableEditStatus.textContent = message;
+      els.tableEditStatus.className = `table-edit-status${type ? " " + type : ""}`;
+    }
+
+    function clearFiltersForNewRow() {
+      els.searchInput.value = "";
+      els.workerFilter.value = "all";
+      els.clientFilter.value = "all";
+      els.dueFilter.value = "all";
+      els.remarksFilter.value = "all";
+    }
+
+    function focusTableCell(recordId, field) {
+      requestAnimationFrame(() => {
+        const row = [...els.projectRows.querySelectorAll("tr")].find((item) => item.dataset.id === recordId);
+        const cell = row && [...row.querySelectorAll(".editable")].find((item) => item.dataset.field === field);
+        if (!cell) return;
+        cell.focus();
+        const range = document.createRange();
+        range.selectNodeContents(cell);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+      });
+    }
+
+    function selectTableRow(recordId, rowElement) {
+      state.selectedId = recordId;
+      els.projectRows.querySelectorAll("tr.selected").forEach((row) => row.classList.remove("selected"));
+      rowElement.classList.add("selected");
+      renderDetails();
+      renderEntryState();
+      renderTableEditState();
+    }
+
+    function getManualRecordIndex(record) {
+      const existingIndex = state.manualRecords.findIndex((item) => item.id === record.id);
+      return existingIndex >= 0 ? 100000 + existingIndex : 100000 + state.manualRecords.length;
+    }
+
+    function cloneRecord(record) {
+      return {
+        id: record.id,
+        replacesId: record.replacesId || "",
+        sourceType: "manual",
+        worker: record.worker,
+        sheetName: record.sheetName,
+        rowNumber: record.rowNumber,
+        jobNumber: record.jobNumber,
+        client: record.client,
+        project: record.project,
+        hours: { ...record.hours },
+        notes: record.notes,
+        dueText: record.dueText || formatShortDate(record.dueDate) || "",
+        dueDate: record.dueDate,
+        remarks: record.remarks
+      };
+    }
+
+    function emptyHours() {
+      return { mon: 0, tue: 0, wed: 0, thu: 0, fri: 0 };
+    }
+
+    function cleanEditableValue(value) {
+      return clean(String(value || "").replace(/\u00a0/g, " "));
     }
 
     function initPlannerPanel() {
@@ -1972,7 +2300,7 @@
     }
 
     function updatePlannerSummary() {
-      const count = state.records.filter((record) => record.sourceType === "planner").length;
+      const count = state.plannerRecords.length;
       els.plannerSummary.textContent = count
         ? `${count} Planner task${count === 1 ? "" : "s"} loaded`
         : "No Planner tasks loaded";
@@ -2044,6 +2372,7 @@
       renderDueLanes();
       renderDetails();
       renderEntryState();
+      renderTableEditState();
       updatePlannerSummary();
       els.lastUpdated.textContent = "Updated " + formatDateTime(new Date());
     }
@@ -2164,24 +2493,23 @@
         if (record.id === state.selectedId) tr.classList.add("selected");
 
         tr.innerHTML = `
-          <td>${escapeHtml(record.worker)}</td>
-          <td><span class="job">${escapeHtml(record.jobNumber || "-")}</span></td>
+          <td>${editableCell(record, "worker", record.worker, "Worker")}</td>
+          <td>${editableCell(record, "jobNumber", record.jobNumber, "-", "job")}</td>
           <td class="project-cell">
-            <div class="project-name">${escapeHtml(record.project || "-")}</div>
-            <div class="client">${escapeHtml(record.client || "-")}</div>
+            ${editableCell(record, "project", record.project, "Project", "project-name", "div")}
+            ${editableCell(record, "client", record.client, "Client", "client", "div")}
           </td>
-          ${dayKeys.map((key) => `<td class="compact">${displayHour(record.hours[key])}</td>`).join("")}
+          ${dayKeys.map((key) => `<td class="compact">${editableCell(record, `hours.${key}`, displayInputHour(record.hours[key]), "", "hour-edit")}</td>`).join("")}
           <td class="compact"><strong>${displayHour(record.totalHours)}</strong></td>
-          <td class="notes-cell">${escapeHtml(record.notes || "")}</td>
-          <td>${duePill(record)}</td>
-          <td>${remarksPill(record.remarks)}</td>
+          <td class="notes-cell">${editableCell(record, "notes", record.notes, "", "notes-edit", "div")}</td>
+          <td>${editablePill(record, "dueText", formatShortDate(record.dueDate) || record.dueText, "No due", duePillClass(record))}</td>
+          <td>${editablePill(record, "remarks", record.remarks, "No remarks", remarksPillClass(record.remarks))}</td>
         `;
 
-        tr.addEventListener("click", () => {
-          state.selectedId = record.id;
-          renderTable();
-          renderDetails();
-          renderEntryState();
+        tr.addEventListener("click", (event) => {
+          const isEditing = Boolean(event.target.closest(".editable"));
+          selectTableRow(record.id, tr);
+          if (!isEditing) renderTable();
         });
 
         fragment.append(tr);
@@ -2190,6 +2518,37 @@
       els.projectRows.append(fragment);
       els.emptyState.style.display = state.filtered.length ? "none" : "block";
       els.tableCount.textContent = state.filtered.length + plural(state.filtered.length, " row", " rows");
+    }
+
+    function editableCell(record, field, value, placeholder, className = "", tag = "span") {
+      const text = String(value || "");
+      const emptyClass = text ? "" : " empty-value";
+      return `<${tag} class="editable ${className}${emptyClass}" contenteditable="true" spellcheck="false" data-id="${escapeHtml(record.id)}" data-field="${escapeHtml(field)}" data-original="${escapeHtml(text)}" data-placeholder="${escapeHtml(placeholder)}">${escapeHtml(text)}</${tag}>`;
+    }
+
+    function editablePill(record, field, value, placeholder, className) {
+      const text = String(value || "");
+      const emptyClass = text ? "" : " empty-value";
+      return `<span class="pill ${className} editable editable-pill${emptyClass}" contenteditable="true" spellcheck="false" data-id="${escapeHtml(record.id)}" data-field="${escapeHtml(field)}" data-original="${escapeHtml(text)}" data-placeholder="${escapeHtml(placeholder)}">${escapeHtml(text)}</span>`;
+    }
+
+    function duePillClass(record) {
+      const classes = {
+        overdue: "red",
+        soon: "amber",
+        future: "green",
+        none: "gray"
+      };
+      return classes[record.dueBucket] || "gray";
+    }
+
+    function remarksPillClass(remarks) {
+      if (!remarks) return "gray";
+      const normalized = remarks.toLowerCase();
+      if (normalized.includes("review")) return "amber";
+      if (normalized.includes("sent")) return "green";
+      if (normalized.includes("hold") || normalized.includes("waiting")) return "red";
+      return "blue";
     }
 
     function renderWorkload() {
@@ -2310,6 +2669,7 @@
 
       return {
         id: record.id || "row-" + index,
+        replacesId: clean(record.replacesId),
         sourceType: clean(record.sourceType) || "excel",
         worker: clean(record.worker) || "Unassigned",
         sheetName: clean(record.sheetName),
@@ -2464,12 +2824,14 @@
         localStorage.setItem(MANUAL_RECORDS_KEY, JSON.stringify(state.manualRecords.map(serializeRecord)));
       } catch {
         setEntryStatus("Could not save rows in browser storage.");
+        setTableEditStatus("Could not save rows in browser storage.", "error");
       }
     }
 
     function serializeRecord(record) {
       return {
         id: record.id,
+        replacesId: record.replacesId,
         sourceType: record.sourceType,
         worker: record.worker,
         jobNumber: record.jobNumber,
