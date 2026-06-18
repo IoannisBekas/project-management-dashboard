@@ -251,6 +251,54 @@
       box-shadow: var(--shadow);
     }
 
+    .planner-panel {
+      display: grid;
+      gap: 0;
+    }
+
+    .planner-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(150px, 1fr));
+      gap: 10px;
+      padding: 14px 16px;
+    }
+
+    .planner-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 0 16px 14px;
+    }
+
+    .planner-status {
+      margin: 0 16px 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fbfcfb;
+      color: var(--muted);
+      padding: 10px 12px;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .planner-status.warning {
+      border-color: var(--amber);
+      background: var(--amber-soft);
+      color: #5c3900;
+    }
+
+    .planner-status.error {
+      border-color: var(--red);
+      background: var(--red-soft);
+      color: var(--red);
+    }
+
+    .planner-status.success {
+      border-color: #a9d9bd;
+      background: var(--green-soft);
+      color: var(--green);
+    }
+
     .content-grid {
       display: grid;
       grid-template-columns: minmax(0, 1fr) 340px;
@@ -685,6 +733,10 @@
         grid-template-columns: 1fr;
       }
 
+      .planner-grid {
+        grid-template-columns: 1fr;
+      }
+
       .availability-summary-grid {
         grid-template-columns: 1fr;
       }
@@ -826,6 +878,42 @@
         </label>
       </section>
 
+      <section class="panel planner-panel" aria-label="Microsoft Planner feed">
+        <div class="panel-header">
+          <div>
+            <h2>Microsoft Planner</h2>
+            <p id="plannerSummary">No Planner tasks loaded</p>
+          </div>
+        </div>
+        <div class="planner-grid">
+          <label>
+            Client ID
+            <input id="plannerClientId" type="text" autocomplete="off" placeholder="Application client ID">
+          </label>
+          <label>
+            Tenant ID
+            <input id="plannerTenantId" type="text" autocomplete="off" placeholder="organizations">
+          </label>
+          <label>
+            Default task hours
+            <input id="plannerDefaultHours" type="number" min="0" max="120" step="0.5" value="1">
+          </label>
+          <label>
+            Plan
+            <select id="plannerPlanSelect">
+              <option value="">Load plans first</option>
+            </select>
+          </label>
+        </div>
+        <div class="planner-actions">
+          <button type="button" id="plannerConnectButton">Connect Planner</button>
+          <button type="button" id="plannerLoadPlansButton">Load Plans</button>
+          <button type="button" id="plannerImportButton">Import Tasks</button>
+          <button type="button" id="plannerClearButton">Clear Planner Tasks</button>
+        </div>
+        <div class="planner-status" id="plannerStatus">Planner sign-in is available from the published HTTPS page.</div>
+      </section>
+
       <section class="panel" aria-label="Weekly availability">
         <div class="panel-header">
           <div>
@@ -936,6 +1024,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.28.1/lib/msal-browser.min.js"></script>
   <script>
     const dayKeys = ["mon", "tue", "wed", "thu", "fri"];
     const dayLabels = { mon: "M", tue: "T", wed: "W", thu: "T", fri: "F" };
@@ -943,13 +1032,22 @@
     const today = startOfDay(new Date());
     const DEFAULT_WEEKLY_CAPACITY = 40;
     const CAPACITY_STORAGE_KEY = "projectDashboard.weeklyCapacity";
+    const PLANNER_CLIENT_ID_KEY = "projectDashboard.plannerClientId";
+    const PLANNER_TENANT_ID_KEY = "projectDashboard.plannerTenantId";
+    const PLANNER_DEFAULT_HOURS_KEY = "projectDashboard.plannerDefaultHours";
+    const PLANNER_SCOPES = ["User.Read", "Tasks.Read"];
+    const LIVE_DASHBOARD_URL = "https://ioannisbekas.github.io/project-management-dashboard/";
 
     const state = {
       records: [],
       filtered: [],
       selectedId: null,
       sourceName: "Sample workbook data",
-      weeklyCapacity: readStoredCapacity()
+      weeklyCapacity: readStoredCapacity(),
+      plannerClient: null,
+      plannerAccount: null,
+      plannerPlans: [],
+      plannerUserCache: new Map()
     };
 
     const els = {
@@ -965,6 +1063,16 @@
       dueFilter: document.getElementById("dueFilter"),
       remarksFilter: document.getElementById("remarksFilter"),
       sortSelect: document.getElementById("sortSelect"),
+      plannerSummary: document.getElementById("plannerSummary"),
+      plannerClientId: document.getElementById("plannerClientId"),
+      plannerTenantId: document.getElementById("plannerTenantId"),
+      plannerDefaultHours: document.getElementById("plannerDefaultHours"),
+      plannerPlanSelect: document.getElementById("plannerPlanSelect"),
+      plannerConnectButton: document.getElementById("plannerConnectButton"),
+      plannerLoadPlansButton: document.getElementById("plannerLoadPlansButton"),
+      plannerImportButton: document.getElementById("plannerImportButton"),
+      plannerClearButton: document.getElementById("plannerClearButton"),
+      plannerStatus: document.getElementById("plannerStatus"),
       activeJobs: document.getElementById("activeJobs"),
       activeJobsHint: document.getElementById("activeJobsHint"),
       weekHours: document.getElementById("weekHours"),
@@ -1092,6 +1200,7 @@
 
     document.addEventListener("DOMContentLoaded", () => {
       els.weeklyCapacityInput.value = state.weeklyCapacity;
+      initPlannerPanel();
       bindEvents();
       setRecords(sampleRecords, "Sample workbook data");
       if (!window.XLSX) {
@@ -1109,6 +1218,14 @@
         saveWeeklyCapacity(state.weeklyCapacity);
         renderAvailability();
       });
+      els.plannerClientId.addEventListener("input", savePlannerSettings);
+      els.plannerTenantId.addEventListener("input", savePlannerSettings);
+      els.plannerDefaultHours.addEventListener("input", savePlannerSettings);
+      els.plannerPlanSelect.addEventListener("input", updatePlannerButtonState);
+      els.plannerConnectButton.addEventListener("click", connectPlanner);
+      els.plannerLoadPlansButton.addEventListener("click", loadPlannerPlans);
+      els.plannerImportButton.addEventListener("click", importSelectedPlannerPlan);
+      els.plannerClearButton.addEventListener("click", clearPlannerRecords);
       [
         els.searchInput,
         els.workerFilter,
@@ -1293,6 +1410,310 @@
       select.value = options.includes(current) ? current : "all";
     }
 
+    function initPlannerPanel() {
+      els.plannerClientId.value = localStorage.getItem(PLANNER_CLIENT_ID_KEY) || "";
+      els.plannerTenantId.value = localStorage.getItem(PLANNER_TENANT_ID_KEY) || "organizations";
+      els.plannerDefaultHours.value = localStorage.getItem(PLANNER_DEFAULT_HOURS_KEY) || "1";
+      if (!isPlannerAuthSupported()) {
+        setPlannerStatus("Open the live GitHub Pages URL to connect Microsoft Planner.", "warning");
+      } else if (!window.msal) {
+        setPlannerStatus("Microsoft sign-in library is still loading or unavailable.", "warning");
+      }
+      updatePlannerButtonState();
+    }
+
+    function savePlannerSettings() {
+      localStorage.setItem(PLANNER_CLIENT_ID_KEY, clean(els.plannerClientId.value));
+      localStorage.setItem(PLANNER_TENANT_ID_KEY, clean(els.plannerTenantId.value) || "organizations");
+      localStorage.setItem(PLANNER_DEFAULT_HOURS_KEY, String(Math.max(0, toNumber(els.plannerDefaultHours.value))));
+      state.plannerClient = null;
+      updatePlannerButtonState();
+    }
+
+    function updatePlannerButtonState() {
+      const canAuth = Boolean(clean(els.plannerClientId.value)) && isPlannerAuthSupported();
+      els.plannerConnectButton.disabled = !canAuth;
+      els.plannerLoadPlansButton.disabled = !canAuth;
+      els.plannerImportButton.disabled = !canAuth || !els.plannerPlanSelect.value;
+    }
+
+    async function connectPlanner() {
+      try {
+        const client = await getPlannerClient();
+        const result = await client.loginPopup({
+          scopes: PLANNER_SCOPES,
+          prompt: "select_account"
+        });
+        state.plannerAccount = result.account;
+        client.setActiveAccount(result.account);
+        setPlannerStatus("Connected to Microsoft Planner.", "success");
+        await loadPlannerPlans();
+      } catch (error) {
+        console.error(error);
+        setPlannerStatus(plannerErrorMessage(error), "error");
+      }
+    }
+
+    async function loadPlannerPlans() {
+      try {
+        const token = await getPlannerToken();
+        const plans = await graphGetPaged("/me/planner/plans", token);
+        state.plannerPlans = plans.sort((a, b) => textCompare(a.title, b.title));
+        els.plannerPlanSelect.innerHTML = "";
+        if (!state.plannerPlans.length) {
+          els.plannerPlanSelect.append(new Option("No plans found", ""));
+          setPlannerStatus("No Planner plans were returned for this account.", "warning");
+        } else {
+          state.plannerPlans.forEach((plan) => {
+            els.plannerPlanSelect.append(new Option(plan.title || plan.id, plan.id));
+          });
+          setPlannerStatus(`${state.plannerPlans.length} Planner plans loaded.`, "success");
+        }
+        updatePlannerButtonState();
+      } catch (error) {
+        console.error(error);
+        setPlannerStatus(plannerErrorMessage(error), "error");
+      }
+    }
+
+    async function importSelectedPlannerPlan() {
+      const planId = els.plannerPlanSelect.value;
+      if (!planId) return;
+
+      try {
+        const token = await getPlannerToken();
+        const plan = state.plannerPlans.find((item) => item.id === planId) || { id: planId, title: "Planner" };
+        const [tasks, buckets] = await Promise.all([
+          graphGetPaged(`/planner/plans/${encodeURIComponent(planId)}/tasks`, token),
+          graphGetPaged(`/planner/plans/${encodeURIComponent(planId)}/buckets`, token).catch(() => [])
+        ]);
+        const bucketNames = new Map(buckets.map((bucket) => [bucket.id, bucket.name]));
+        const userIds = unique(tasks.flatMap((task) => Object.keys(task.assignments || {})));
+        const users = await resolvePlannerUsers(userIds, token);
+        const records = tasks
+          .filter((task) => task.percentComplete !== 100)
+          .flatMap((task, index) => plannerTaskToRecords(task, plan, bucketNames, users, index));
+
+        state.records = state.records.filter((record) => record.sourceType !== "planner");
+        state.records.push(...records.map((record, index) => finalizeRecord(record, state.records.length + index + 1)));
+        state.selectedId = state.records[0] ? state.records[0].id : null;
+        buildSelects();
+        render();
+        updatePlannerSummary();
+        els.sourceLabel.textContent = `${state.sourceName} + Planner`;
+        setPlannerStatus(`${records.length} Planner task rows imported from ${plan.title || "selected plan"}.`, "success");
+      } catch (error) {
+        console.error(error);
+        setPlannerStatus(plannerErrorMessage(error), "error");
+      }
+    }
+
+    function clearPlannerRecords() {
+      const before = state.records.length;
+      state.records = state.records.filter((record) => record.sourceType !== "planner");
+      if (state.selectedId && !state.records.some((record) => record.id === state.selectedId)) {
+        state.selectedId = state.records[0] ? state.records[0].id : null;
+      }
+      buildSelects();
+      render();
+      updatePlannerSummary();
+      els.sourceLabel.textContent = state.sourceName;
+      setPlannerStatus(`${before - state.records.length} Planner task rows cleared.`, "success");
+    }
+
+    async function getPlannerClient() {
+      if (!isPlannerAuthSupported()) throw new Error("Planner sign-in requires the live HTTPS page.");
+      if (!window.msal) throw new Error("Microsoft sign-in library is unavailable.");
+      const clientId = clean(els.plannerClientId.value);
+      if (!clientId) throw new Error("Enter a Microsoft Entra application client ID.");
+
+      if (!state.plannerClient) {
+        const tenantId = clean(els.plannerTenantId.value) || "organizations";
+        state.plannerClient = new msal.PublicClientApplication({
+          auth: {
+            clientId,
+            authority: `https://login.microsoftonline.com/${tenantId}`,
+            redirectUri: getPlannerRedirectUri()
+          },
+          cache: {
+            cacheLocation: "localStorage"
+          }
+        });
+        await state.plannerClient.initialize();
+        await state.plannerClient.handleRedirectPromise();
+        state.plannerAccount = state.plannerClient.getActiveAccount() || state.plannerClient.getAllAccounts()[0] || null;
+      }
+
+      return state.plannerClient;
+    }
+
+    async function getPlannerToken() {
+      const client = await getPlannerClient();
+      const account = state.plannerAccount || client.getActiveAccount() || client.getAllAccounts()[0];
+      if (!account) {
+        const login = await client.loginPopup({ scopes: PLANNER_SCOPES, prompt: "select_account" });
+        state.plannerAccount = login.account;
+        client.setActiveAccount(login.account);
+        return login.accessToken;
+      }
+
+      state.plannerAccount = account;
+      client.setActiveAccount(account);
+      try {
+        const result = await client.acquireTokenSilent({ scopes: PLANNER_SCOPES, account });
+        return result.accessToken;
+      } catch {
+        const result = await client.acquireTokenPopup({ scopes: PLANNER_SCOPES, account });
+        return result.accessToken;
+      }
+    }
+
+    async function graphGetPaged(path, token) {
+      const rows = [];
+      let url = path.startsWith("https://")
+        ? path
+        : `https://graph.microsoft.com/v1.0${path}`;
+
+      while (url) {
+        const response = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json"
+          }
+        });
+
+        if (!response.ok) {
+          const body = await response.text();
+          throw new Error(`Microsoft Graph ${response.status}: ${body || response.statusText}`);
+        }
+
+        const payload = await response.json();
+        rows.push(...(payload.value || []));
+        url = payload["@odata.nextLink"] || "";
+      }
+
+      return rows;
+    }
+
+    async function graphGet(path, token) {
+      const response = await fetch(`https://graph.microsoft.com/v1.0${path}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json"
+        }
+      });
+      if (!response.ok) {
+        const body = await response.text();
+        throw new Error(`Microsoft Graph ${response.status}: ${body || response.statusText}`);
+      }
+      return response.json();
+    }
+
+    async function resolvePlannerUsers(userIds, token) {
+      const users = new Map();
+      for (const userId of userIds) {
+        if (state.plannerUserCache.has(userId)) {
+          users.set(userId, state.plannerUserCache.get(userId));
+          continue;
+        }
+
+        try {
+          const user = await graphGet(`/users/${encodeURIComponent(userId)}?$select=displayName,mail,userPrincipalName`, token);
+          const label = user.displayName || user.mail || user.userPrincipalName || shortId(userId);
+          state.plannerUserCache.set(userId, label);
+          users.set(userId, label);
+        } catch {
+          const fallback = shortId(userId);
+          state.plannerUserCache.set(userId, fallback);
+          users.set(userId, fallback);
+        }
+      }
+      return users;
+    }
+
+    function plannerTaskToRecords(task, plan, bucketNames, users, index) {
+      const assignedIds = Object.keys(task.assignments || {});
+      const workerNames = assignedIds.length
+        ? assignedIds.map((userId) => users.get(userId) || shortId(userId))
+        : ["Planner Unassigned"];
+      const totalHours = extractPlannerHours(task.title) || Math.max(0, toNumber(els.plannerDefaultHours.value));
+      const perWorkerHours = workerNames.length ? totalHours / workerNames.length : totalHours;
+      const dueDate = parseDueDate(task.dueDateTime);
+      const bucketName = bucketNames.get(task.bucketId) || "";
+
+      return workerNames.map((worker, workerIndex) => ({
+        id: `planner-${task.id}-${workerIndex}`,
+        sourceType: "planner",
+        worker,
+        jobNumber: task.id ? `PLN-${task.id.slice(0, 6)}` : `PLN-${index + 1}`,
+        client: plan.title || "Microsoft Planner",
+        project: task.title || "Untitled Planner task",
+        hours: plannerHoursByDueDate(perWorkerHours, dueDate),
+        notes: [bucketName, task.percentComplete ? `${task.percentComplete}% complete` : ""].filter(Boolean).join(" | "),
+        dueText: task.dueDateTime || "",
+        dueDate,
+        remarks: "PLANNER"
+      }));
+    }
+
+    function plannerHoursByDueDate(hours, dueDate) {
+      const result = { mon: 0, tue: 0, wed: 0, thu: 0, fri: 0 };
+      if (!hours) return result;
+      if (!dueDate) {
+        result.mon = hours;
+        return result;
+      }
+      const keyByDay = ["", "mon", "tue", "wed", "thu", "fri", ""];
+      const key = keyByDay[dueDate.getDay()] || "fri";
+      result[key] = hours;
+      return result;
+    }
+
+    function extractPlannerHours(title) {
+      const text = clean(title);
+      const match = text.match(/(?:^|[\s[(])(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hour|hours)(?:\b|[\])])/i);
+      return match ? Number(match[1]) : 0;
+    }
+
+    function updatePlannerSummary() {
+      const count = state.records.filter((record) => record.sourceType === "planner").length;
+      els.plannerSummary.textContent = count
+        ? `${count} Planner task${count === 1 ? "" : "s"} loaded`
+        : "No Planner tasks loaded";
+    }
+
+    function setPlannerStatus(message, type = "") {
+      els.plannerStatus.textContent = message;
+      els.plannerStatus.className = `planner-status${type ? " " + type : ""}`;
+    }
+
+    function plannerErrorMessage(error) {
+      const message = error && (error.message || error.errorMessage || String(error));
+      if (!message) return "Planner connection failed.";
+      if (message.includes("AADSTS65001") || message.includes("consent")) {
+        return "Planner permissions need consent in Microsoft Entra.";
+      }
+      if (message.includes("403")) {
+        return "Microsoft Graph denied access. Check Tasks.Read permission and account access to the plan.";
+      }
+      return message;
+    }
+
+    function getPlannerRedirectUri() {
+      if (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+        return `${location.origin}${location.pathname}`;
+      }
+      return LIVE_DASHBOARD_URL;
+    }
+
+    function isPlannerAuthSupported() {
+      return location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1";
+    }
+
+    function shortId(value) {
+      return String(value || "").slice(0, 8) || "Unknown";
+    }
+
     function render() {
       const query = els.searchInput.value.trim().toLowerCase();
       const worker = els.workerFilter.value;
@@ -1326,6 +1747,7 @@
       renderWorkload();
       renderDueLanes();
       renderDetails();
+      updatePlannerSummary();
       els.lastUpdated.textContent = "Updated " + formatDateTime(new Date());
     }
 
@@ -1369,12 +1791,17 @@
       const rowsByWorker = new Map();
       state.filtered.forEach((record) => {
         const current = rowsByWorker.get(record.worker) || { worker: record.worker, booked: [0, 0, 0] };
-        current.booked[0] += record.totalHours;
-        weeks.slice(1).forEach((week, weekIndex) => {
-          if (isInDateRange(record.dueDate, week.start, week.end)) {
-            current.booked[weekIndex + 1] += record.totalHours;
-          }
-        });
+        if (record.sourceType === "planner") {
+          const weekIndex = getForecastWeekIndex(record.dueDate, weeks);
+          current.booked[weekIndex >= 0 ? weekIndex : 0] += record.totalHours;
+        } else {
+          current.booked[0] += record.totalHours;
+          weeks.slice(1).forEach((week, weekIndex) => {
+            if (isInDateRange(record.dueDate, week.start, week.end)) {
+              current.booked[weekIndex + 1] += record.totalHours;
+            }
+          });
+        }
         rowsByWorker.set(record.worker, current);
       });
 
@@ -1581,6 +2008,7 @@
 
       return {
         id: record.id || "row-" + index,
+        sourceType: clean(record.sourceType) || "excel",
         worker: clean(record.worker) || "Unassigned",
         sheetName: clean(record.sheetName),
         rowNumber: record.rowNumber || "",
@@ -1612,6 +2040,7 @@
       if (!remarks) return `<span class="pill gray">No remarks</span>`;
       const normalized = remarks.toLowerCase();
       let className = "blue";
+      if (normalized.includes("planner")) className = "blue";
       if (normalized.includes("review")) className = "amber";
       if (normalized.includes("sent")) className = "green";
       if (normalized.includes("hold") || normalized.includes("waiting")) className = "red";
@@ -1675,6 +2104,11 @@
 
     function isInDateRange(date, start, end) {
       return Boolean(date && date >= start && date < end);
+    }
+
+    function getForecastWeekIndex(date, weeks) {
+      if (!date) return -1;
+      return weeks.findIndex((week) => isInDateRange(date, week.start, week.end));
     }
 
     function formatWeekRange(start, end) {
