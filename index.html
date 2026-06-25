@@ -325,6 +325,10 @@
       padding: 14px 16px;
     }
 
+    .planner-grid .wide {
+      grid-column: span 2;
+    }
+
     .planner-actions {
       display: flex;
       flex-wrap: wrap;
@@ -359,6 +363,73 @@
       border-color: #a9d9bd;
       background: var(--green-soft);
       color: var(--green);
+    }
+
+    .planner-sync {
+      margin: 0 16px 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fbfcfb;
+      overflow: hidden;
+    }
+
+    .planner-sync-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .planner-sync-head strong {
+      font-size: 13px;
+      text-transform: uppercase;
+    }
+
+    .planner-sync-head span {
+      color: var(--muted);
+      font-size: 13px;
+      text-align: right;
+    }
+
+    .planner-sync-list {
+      max-height: 220px;
+      overflow: auto;
+    }
+
+    .planner-sync-table {
+      width: 100%;
+      min-width: 720px;
+    }
+
+    .planner-sync-table th {
+      position: static;
+      z-index: auto;
+    }
+
+    .planner-sync-table td {
+      font-size: 13px;
+      vertical-align: middle;
+    }
+
+    .planner-sync-table .plan-title {
+      max-width: 340px;
+      font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .planner-sync-table .right {
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .planner-sync-empty {
+      color: var(--muted);
+      padding: 12px;
+      font-size: 13px;
     }
 
     .content-grid {
@@ -894,6 +965,10 @@
         grid-template-columns: 1fr;
       }
 
+      .planner-grid .wide {
+        grid-column: auto;
+      }
+
       .entry-grid {
         grid-template-columns: 1fr;
       }
@@ -1139,14 +1214,32 @@
               <option value="">Load plans first</option>
             </select>
           </label>
+          <label class="wide">
+            Include plan names
+            <input id="plannerIncludeFilter" type="text" autocomplete="off" placeholder="26-, 25-, D&H Fire">
+          </label>
+          <label class="wide">
+            Exclude plan names
+            <input id="plannerExcludeFilter" type="text" autocomplete="off" placeholder="template, archive">
+          </label>
         </div>
         <div class="planner-actions">
           <button type="button" id="plannerConnectButton">Connect Planner</button>
           <button type="button" id="plannerLoadPlansButton">Load Plans</button>
-          <button type="button" id="plannerImportButton">Import Tasks</button>
+          <button type="button" id="plannerImportButton">Import Selected Plan</button>
+          <button type="button" id="plannerImportAllButton">Import Matching Plans</button>
           <button type="button" id="plannerClearButton">Clear Planner Tasks</button>
         </div>
         <div class="planner-status" id="plannerStatus">Planner sign-in is available from the published HTTPS page.</div>
+        <div class="planner-sync" id="plannerSyncPanel">
+          <div class="planner-sync-head">
+            <strong>Planner Sync</strong>
+            <span id="plannerPlanMatchCount">Load plans to see matches</span>
+          </div>
+          <div class="planner-sync-list" id="plannerSyncList">
+            <div class="planner-sync-empty">No Planner sync yet.</div>
+          </div>
+        </div>
       </section>
 
       <section class="panel" aria-label="Weekly availability">
@@ -1276,6 +1369,8 @@
     const PLANNER_CLIENT_ID_KEY = "projectDashboard.plannerClientId";
     const PLANNER_TENANT_ID_KEY = "projectDashboard.plannerTenantId";
     const PLANNER_DEFAULT_HOURS_KEY = "projectDashboard.plannerDefaultHours";
+    const PLANNER_INCLUDE_FILTER_KEY = "projectDashboard.plannerIncludeFilter";
+    const PLANNER_EXCLUDE_FILTER_KEY = "projectDashboard.plannerExcludeFilter";
     const PLANNER_SCOPES = ["User.Read", "Tasks.Read"];
     const LIVE_DASHBOARD_URL = "https://ioannisbekas.github.io/project-management-dashboard/";
 
@@ -1292,7 +1387,9 @@
       plannerClient: null,
       plannerAccount: null,
       plannerPlans: [],
-      plannerUserCache: new Map()
+      plannerSyncRows: [],
+      plannerUserCache: new Map(),
+      plannerImporting: false
     };
 
     const els = {
@@ -1332,11 +1429,16 @@
       plannerTenantId: document.getElementById("plannerTenantId"),
       plannerDefaultHours: document.getElementById("plannerDefaultHours"),
       plannerPlanSelect: document.getElementById("plannerPlanSelect"),
+      plannerIncludeFilter: document.getElementById("plannerIncludeFilter"),
+      plannerExcludeFilter: document.getElementById("plannerExcludeFilter"),
       plannerConnectButton: document.getElementById("plannerConnectButton"),
       plannerLoadPlansButton: document.getElementById("plannerLoadPlansButton"),
       plannerImportButton: document.getElementById("plannerImportButton"),
+      plannerImportAllButton: document.getElementById("plannerImportAllButton"),
       plannerClearButton: document.getElementById("plannerClearButton"),
       plannerStatus: document.getElementById("plannerStatus"),
+      plannerPlanMatchCount: document.getElementById("plannerPlanMatchCount"),
+      plannerSyncList: document.getElementById("plannerSyncList"),
       activeJobs: document.getElementById("activeJobs"),
       activeJobsHint: document.getElementById("activeJobsHint"),
       weekHours: document.getElementById("weekHours"),
@@ -1496,10 +1598,13 @@
       els.plannerClientId.addEventListener("input", savePlannerSettings);
       els.plannerTenantId.addEventListener("input", savePlannerSettings);
       els.plannerDefaultHours.addEventListener("input", savePlannerSettings);
+      els.plannerIncludeFilter.addEventListener("input", savePlannerSettings);
+      els.plannerExcludeFilter.addEventListener("input", savePlannerSettings);
       els.plannerPlanSelect.addEventListener("input", updatePlannerButtonState);
       els.plannerConnectButton.addEventListener("click", connectPlanner);
       els.plannerLoadPlansButton.addEventListener("click", loadPlannerPlans);
       els.plannerImportButton.addEventListener("click", importSelectedPlannerPlan);
+      els.plannerImportAllButton.addEventListener("click", importMatchingPlannerPlans);
       els.plannerClearButton.addEventListener("click", clearPlannerRecords);
       [
         els.searchInput,
@@ -2011,6 +2116,10 @@
         id: record.id,
         replacesId: record.replacesId || "",
         sourceType: "manual",
+        plannerPlanId: record.plannerPlanId || "",
+        plannerPlanTitle: record.plannerPlanTitle || "",
+        plannerTaskId: record.plannerTaskId || "",
+        plannerBucket: record.plannerBucket || "",
         worker: record.worker,
         sheetName: record.sheetName,
         rowNumber: record.rowNumber,
@@ -2037,27 +2146,101 @@
       els.plannerClientId.value = localStorage.getItem(PLANNER_CLIENT_ID_KEY) || "";
       els.plannerTenantId.value = localStorage.getItem(PLANNER_TENANT_ID_KEY) || "organizations";
       els.plannerDefaultHours.value = localStorage.getItem(PLANNER_DEFAULT_HOURS_KEY) || "1";
+      els.plannerIncludeFilter.value = localStorage.getItem(PLANNER_INCLUDE_FILTER_KEY) || "";
+      els.plannerExcludeFilter.value = localStorage.getItem(PLANNER_EXCLUDE_FILTER_KEY) || "template";
       if (!isPlannerAuthSupported()) {
         setPlannerStatus("Open the live GitHub Pages URL to connect Microsoft Planner.", "warning");
       } else if (!window.msal) {
         setPlannerStatus("Microsoft sign-in library is still loading or unavailable.", "warning");
       }
       updatePlannerButtonState();
+      renderPlannerSync();
     }
 
     function savePlannerSettings() {
       localStorage.setItem(PLANNER_CLIENT_ID_KEY, clean(els.plannerClientId.value));
       localStorage.setItem(PLANNER_TENANT_ID_KEY, clean(els.plannerTenantId.value) || "organizations");
       localStorage.setItem(PLANNER_DEFAULT_HOURS_KEY, String(Math.max(0, toNumber(els.plannerDefaultHours.value))));
+      localStorage.setItem(PLANNER_INCLUDE_FILTER_KEY, clean(els.plannerIncludeFilter.value));
+      localStorage.setItem(PLANNER_EXCLUDE_FILTER_KEY, clean(els.plannerExcludeFilter.value));
       state.plannerClient = null;
       updatePlannerButtonState();
+      renderPlannerSync();
     }
 
     function updatePlannerButtonState() {
-      const canAuth = Boolean(clean(els.plannerClientId.value)) && isPlannerAuthSupported();
+      const canAuth = Boolean(clean(els.plannerClientId.value)) && isPlannerAuthSupported() && !state.plannerImporting;
+      const matchingPlans = getMatchingPlannerPlans();
       els.plannerConnectButton.disabled = !canAuth;
       els.plannerLoadPlansButton.disabled = !canAuth;
       els.plannerImportButton.disabled = !canAuth || !els.plannerPlanSelect.value;
+      els.plannerImportAllButton.disabled = !canAuth || !matchingPlans.length;
+      els.plannerImportAllButton.textContent = matchingPlans.length
+        ? `Import Matching Plans (${matchingPlans.length})`
+        : "Import Matching Plans";
+    }
+
+    function getMatchingPlannerPlans() {
+      const include = parsePlannerFilter(els.plannerIncludeFilter && els.plannerIncludeFilter.value);
+      const exclude = parsePlannerFilter(els.plannerExcludeFilter && els.plannerExcludeFilter.value);
+      return state.plannerPlans.filter((plan) => {
+        const title = clean(plan.title || plan.id).toLowerCase();
+        const included = include.length ? include.some((token) => title.includes(token)) : true;
+        const excluded = exclude.some((token) => title.includes(token));
+        return included && !excluded;
+      });
+    }
+
+    function parsePlannerFilter(value) {
+      return clean(value)
+        .toLowerCase()
+        .split(/[,\n;]/)
+        .map((item) => clean(item).toLowerCase())
+        .filter(Boolean);
+    }
+
+    function renderPlannerSync() {
+      const matched = getMatchingPlannerPlans().length;
+      const total = state.plannerPlans.length;
+      els.plannerPlanMatchCount.textContent = total
+        ? `${matched} of ${total} plans match filters`
+        : "Load plans to see matches";
+
+      if (!state.plannerSyncRows.length) {
+        els.plannerSyncList.innerHTML = `<div class="planner-sync-empty">No Planner sync yet.</div>`;
+        return;
+      }
+
+      els.plannerSyncList.innerHTML = `
+        <table class="planner-sync-table">
+          <thead>
+            <tr>
+              <th>Plan</th>
+              <th class="right">Tasks</th>
+              <th class="right">Rows</th>
+              <th class="right">Hours</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${state.plannerSyncRows.map((row) => `
+              <tr>
+                <td><div class="plan-title" title="${escapeHtml(row.title)}">${escapeHtml(row.title)}</div></td>
+                <td class="right">${formatNumber(row.activeTasks)} / ${formatNumber(row.tasks)}</td>
+                <td class="right">${formatNumber(row.rows)}</td>
+                <td class="right">${formatNumber(row.hours)}</td>
+                <td>${syncStatusPill(row)}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function syncStatusPill(row) {
+      if (row.status === "error") return `<span class="pill red" title="${escapeHtml(row.message)}">Error</span>`;
+      if (!row.rows) return `<span class="pill gray" title="${escapeHtml(row.message)}">No rows</span>`;
+      return `<span class="pill green" title="${escapeHtml(row.message)}">Imported</span>`;
     }
 
     async function connectPlanner() {
@@ -2090,9 +2273,10 @@
           state.plannerPlans.forEach((plan) => {
             els.plannerPlanSelect.append(new Option(plan.title || plan.id, plan.id));
           });
-          setPlannerStatus(`${state.plannerPlans.length} Planner plans loaded.`, "success");
+          setPlannerStatus(`${state.plannerPlans.length} Planner plans loaded. ${getMatchingPlannerPlans().length} match the current filters.`, "success");
         }
         updatePlannerButtonState();
+        renderPlannerSync();
       } catch (error) {
         console.error(error);
         setPlannerStatus(plannerErrorMessage(error), "error");
@@ -2106,34 +2290,121 @@
       try {
         const token = await getPlannerToken();
         const plan = state.plannerPlans.find((item) => item.id === planId) || { id: planId, title: "Planner" };
-        const [tasks, buckets] = await Promise.all([
-          graphGetPaged(`/planner/plans/${encodeURIComponent(planId)}/tasks`, token),
-          graphGetPaged(`/planner/plans/${encodeURIComponent(planId)}/buckets`, token).catch(() => [])
-        ]);
-        const bucketNames = new Map(buckets.map((bucket) => [bucket.id, bucket.name]));
-        const userIds = unique(tasks.flatMap((task) => Object.keys(task.assignments || {})));
-        const users = await resolvePlannerUsers(userIds, token);
-        const records = tasks
-          .filter((task) => task.percentComplete !== 100)
-          .flatMap((task, index) => plannerTaskToRecords(task, plan, bucketNames, users, index));
-
-        state.plannerRecords = records.map((record, index) => finalizeRecord(record, state.baseRecords.length + state.manualRecords.length + index + 1));
-        mergeRecords();
-        state.selectedId = state.records[0] ? state.records[0].id : null;
-        buildSelects();
-        render();
-        updatePlannerSummary();
-        els.sourceLabel.textContent = `${state.sourceName} + Planner`;
-        setPlannerStatus(`${records.length} Planner task rows imported from ${plan.title || "selected plan"}.`, "success");
+        await importPlannerPlans([plan], token);
       } catch (error) {
         console.error(error);
         setPlannerStatus(plannerErrorMessage(error), "error");
       }
     }
 
+    async function importMatchingPlannerPlans() {
+      try {
+        if (!state.plannerPlans.length) {
+          await loadPlannerPlans();
+        }
+
+        const plans = getMatchingPlannerPlans();
+        if (!plans.length) {
+          setPlannerStatus("No Planner plans match the include/exclude filters.", "warning");
+          return;
+        }
+
+        const token = await getPlannerToken();
+        await importPlannerPlans(plans, token);
+      } catch (error) {
+        console.error(error);
+        setPlannerStatus(plannerErrorMessage(error), "error");
+      }
+    }
+
+    async function importPlannerPlans(plans, token) {
+      state.plannerImporting = true;
+      state.plannerSyncRows = [];
+      state.plannerRecords = [];
+      updatePlannerButtonState();
+      renderPlannerSync();
+
+      const importedRecords = [];
+      for (const [index, plan] of plans.entries()) {
+        setPlannerStatus(`Importing Planner plan ${index + 1} of ${plans.length}: ${plan.title || plan.id}`, "");
+        try {
+          const result = await importPlannerPlanData(plan, token, importedRecords.length);
+          importedRecords.push(...result.records);
+          state.plannerSyncRows.push(result.summary);
+        } catch (error) {
+          console.error(error);
+          state.plannerSyncRows.push({
+            planId: plan.id,
+            title: plan.title || plan.id,
+            tasks: 0,
+            activeTasks: 0,
+            rows: 0,
+            hours: 0,
+            status: "error",
+            message: plannerErrorMessage(error)
+          });
+        }
+        renderPlannerSync();
+      }
+
+      state.plannerRecords = importedRecords.map((record, index) =>
+        finalizeRecord(record, state.baseRecords.length + state.manualRecords.length + index + 1)
+      );
+      state.plannerImporting = false;
+      mergeRecords();
+      state.selectedId = state.records[0] ? state.records[0].id : null;
+      buildSelects();
+      render();
+      updatePlannerSummary();
+      updatePlannerButtonState();
+      els.sourceLabel.textContent = state.plannerRecords.length ? `${state.sourceName} + Planner` : state.sourceName;
+
+      const failed = state.plannerSyncRows.filter((row) => row.status === "error").length;
+      const imported = state.plannerSyncRows.length - failed;
+      const hours = state.plannerRecords.reduce((sum, record) => sum + record.totalHours, 0);
+      setPlannerStatus(
+        `${state.plannerRecords.length} Planner task rows imported from ${imported} plan${imported === 1 ? "" : "s"} (${formatNumber(hours)}h).${failed ? ` ${failed} plan${failed === 1 ? "" : "s"} failed.` : ""}`,
+        failed ? "warning" : "success"
+      );
+    }
+
+    async function importPlannerPlanData(plan, token, recordOffset) {
+      const planId = plan.id;
+      const [tasks, buckets] = await Promise.all([
+        graphGetPaged(`/planner/plans/${encodeURIComponent(planId)}/tasks`, token),
+        graphGetPaged(`/planner/plans/${encodeURIComponent(planId)}/buckets`, token).catch(() => [])
+      ]);
+      const bucketNames = new Map(buckets.map((bucket) => [bucket.id, bucket.name]));
+      const activeTasks = tasks.filter((task) => task.percentComplete !== 100);
+      const userIds = unique(activeTasks.flatMap((task) => Object.keys(task.assignments || {})));
+      const users = await resolvePlannerUsers(userIds, token);
+      const records = activeTasks.flatMap((task, index) =>
+        plannerTaskToRecords(task, plan, bucketNames, users, recordOffset + index)
+      );
+      const hours = records.reduce((sum, record) =>
+        sum + dayKeys.reduce((daySum, key) => daySum + toNumber(record.hours[key]), 0),
+        0
+      );
+
+      return {
+        records,
+        summary: {
+          planId,
+          title: plan.title || planId,
+          tasks: tasks.length,
+          activeTasks: activeTasks.length,
+          rows: records.length,
+          hours,
+          status: "success",
+          message: records.length ? "Imported" : "No open tasks"
+        }
+      };
+    }
+
     function clearPlannerRecords() {
       const before = state.plannerRecords.length;
       state.plannerRecords = [];
+      state.plannerSyncRows = [];
       mergeRecords();
       if (state.selectedId && !state.records.some((record) => record.id === state.selectedId)) {
         state.selectedId = state.records[0] ? state.records[0].id : null;
@@ -2141,6 +2412,7 @@
       buildSelects();
       render();
       updatePlannerSummary();
+      renderPlannerSync();
       els.sourceLabel.textContent = state.sourceName;
       setPlannerStatus(`${before} Planner task rows cleared.`, "success");
     }
@@ -2264,20 +2536,41 @@
       const perWorkerHours = workerNames.length ? totalHours / workerNames.length : totalHours;
       const dueDate = parseDueDate(task.dueDateTime);
       const bucketName = bucketNames.get(task.bucketId) || "";
+      const planMeta = parsePlannerPlanTitle(plan.title || "");
+      const taskStatus = task.percentComplete ? `${task.percentComplete}% complete` : "";
+      const planNote = planMeta.projectName
+        ? `Plan: ${planMeta.projectName}`
+        : `Plan: ${plan.title || "Microsoft Planner"}`;
 
       return workerNames.map((worker, workerIndex) => ({
         id: `planner-${task.id}-${workerIndex}`,
         sourceType: "planner",
+        plannerPlanId: plan.id || "",
+        plannerPlanTitle: plan.title || "",
+        plannerTaskId: task.id || "",
+        plannerBucket: bucketName,
         worker,
-        jobNumber: task.id ? `PLN-${task.id.slice(0, 6)}` : `PLN-${index + 1}`,
-        client: plan.title || "Microsoft Planner",
+        jobNumber: planMeta.jobNumber || (task.id ? `PLN-${task.id.slice(0, 6)}` : `PLN-${index + 1}`),
+        client: planMeta.client || plan.title || "Microsoft Planner",
         project: task.title || "Untitled Planner task",
         hours: plannerHoursByDueDate(perWorkerHours, dueDate),
-        notes: [bucketName, task.percentComplete ? `${task.percentComplete}% complete` : ""].filter(Boolean).join(" | "),
+        notes: [planNote, bucketName, taskStatus].filter(Boolean).join(" | "),
         dueText: task.dueDateTime || "",
         dueDate,
         remarks: "PLANNER"
       }));
+    }
+
+    function parsePlannerPlanTitle(title) {
+      const text = clean(title);
+      const parts = text.split(/\s+-\s+/).map(clean).filter(Boolean);
+      const lead = parts[0] || text;
+      const jobMatch = lead.match(/^(\d{2}-\d{3,5})\s*(.*)$/);
+      return {
+        jobNumber: jobMatch ? clean(jobMatch[1]) : "",
+        projectName: jobMatch ? clean(jobMatch[2]) : lead,
+        client: parts.length > 1 ? parts.slice(1).join(" - ") : ""
+      };
     }
 
     function plannerHoursByDueDate(hours, dueDate) {
@@ -2353,7 +2646,9 @@
           record.project,
           record.notes,
           record.dueText,
-          record.remarks
+          record.remarks,
+          record.plannerPlanTitle,
+          record.plannerBucket
         ].join(" ").toLowerCase();
 
         if (query && !searchable.includes(query)) return false;
@@ -2656,6 +2951,18 @@
           <span>Source</span>
           <div>${escapeHtml(sourceLabel(selected.sourceType))}</div>
         </div>
+        ${selected.plannerPlanTitle ? `
+          <div class="detail-item">
+            <span>Planner Plan</span>
+            <div>${escapeHtml(selected.plannerPlanTitle)}</div>
+          </div>
+        ` : ""}
+        ${selected.plannerBucket ? `
+          <div class="detail-item">
+            <span>Planner Bucket</span>
+            <div>${escapeHtml(selected.plannerBucket)}</div>
+          </div>
+        ` : ""}
       `;
     }
 
@@ -2671,6 +2978,10 @@
         id: record.id || "row-" + index,
         replacesId: clean(record.replacesId),
         sourceType: clean(record.sourceType) || "excel",
+        plannerPlanId: clean(record.plannerPlanId),
+        plannerPlanTitle: clean(record.plannerPlanTitle),
+        plannerTaskId: clean(record.plannerTaskId),
+        plannerBucket: clean(record.plannerBucket),
         worker: clean(record.worker) || "Unassigned",
         sheetName: clean(record.sheetName),
         rowNumber: record.rowNumber || "",
@@ -2833,6 +3144,10 @@
         id: record.id,
         replacesId: record.replacesId,
         sourceType: record.sourceType,
+        plannerPlanId: record.plannerPlanId,
+        plannerPlanTitle: record.plannerPlanTitle,
+        plannerTaskId: record.plannerTaskId,
+        plannerBucket: record.plannerBucket,
         worker: record.worker,
         jobNumber: record.jobNumber,
         client: record.client,
